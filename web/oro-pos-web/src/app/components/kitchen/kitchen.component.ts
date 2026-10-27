@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
 import { KitchenTicketDto, ApiResponse } from '../../models';
 
 @Component({
@@ -11,14 +12,19 @@ import { KitchenTicketDto, ApiResponse } from '../../models';
   templateUrl: './kitchen.component.html',
   styleUrls: ['./kitchen.component.css']
 })
-export class KitchenComponent implements OnInit {
+export class KitchenComponent implements OnInit, OnDestroy {
   ticketColumns: { name: string; tickets: KitchenTicketDto[] }[] = [];
+  private poll?: any;
 
-  constructor(private api: ApiService, private auth: AuthService) {}
+  constructor(private api: ApiService, private auth: AuthService, private toast: ToastService) {}
 
   ngOnInit() {
     this.loadTickets();
-    setInterval(() => this.loadTickets(), 5000);
+    this.poll = setInterval(() => this.loadTickets(), 5000);
+  }
+
+  ngOnDestroy() {
+    if (this.poll) { clearInterval(this.poll); this.poll = undefined; }
   }
 
   loadTickets() {
@@ -36,6 +42,9 @@ export class KitchenComponent implements OnInit {
   }
 
   updateStatus(ticketId: number, status: string) {
-    this.api.updateTicketStatus(ticketId, status).subscribe(() => this.loadTickets());
+    this.api.updateTicketStatus(ticketId, status).subscribe({
+      next: () => this.loadTickets(),
+      error: (err) => this.toast.error(err?.error?.errors?.[0] || 'Could not update ticket status.')
+    });
   }
 }

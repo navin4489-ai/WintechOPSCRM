@@ -1,0 +1,129 @@
+<div class="page-header">
+  <div>
+    <h1>Shifts &amp; Cash Control</h1>
+    <p class="sub">Open a shift to start taking orders, then close it with a counted-cash Z-report.</p>
+  </div>
+  <button class="btn btn-ghost" (click)="load()" [disabled]="loading">↻ Refresh</button>
+</div>
+
+@if (loading) {
+  <div class="panel empty"><span class="spin"></span> Loading shifts…</div>
+} @else {
+  <!-- Open shift status -->
+  @if (openShift) {
+    <div class="panel shift-open">
+      <div class="shift-open-main">
+        <div class="shift-live"><span class="dot"></span> Shift active</div>
+        <h2>Cashier on duty</h2>
+        <div class="meta-row">
+          <span><b>Opened</b> {{ openShift.openTime | date:'short' }}</span>
+          <span><b>Duration</b> {{ hoursBetween(openShift) }}</span>
+          <span><b>Opening float</b> {{ openShift.openingFloat | inr }}</span>
+        </div>
+      </div>
+      <div class="shift-close-box">
+        <label>Counted cash in drawer</label>
+        <input type="number" [(ngModel)]="countedCash" step="0.01" min="0" placeholder="0.00" />
+        <button class="btn btn-danger" (click)="closeShiftNow()" [disabled]="closing">
+          {{ closing ? 'Closing…' : 'Close shift & print Z-report' }}
+        </button>
+        <p class="hint">Closing ends your session — orders can no longer be taken without opening a new shift.</p>
+      </div>
+    </div>
+  } @else {
+    <div class="panel shift-closed">
+      <div class="shift-closed-main">
+        <div class="shift-none">No open shift</div>
+        <h2>Open a shift to begin</h2>
+        <p class="hint">The POS requires an open shift before orders and payments can be recorded.</p>
+      </div>
+      <div class="shift-open-box">
+        <label>Opening float (cash in drawer)</label>
+        <input type="number" [(ngModel)]="openingFloat" step="0.01" min="0" placeholder="0.00" />
+        <button class="btn btn-success" (click)="openShiftNow()">Open shift</button>
+      </div>
+    </div>
+  }
+
+  <!-- History -->
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Shift history</h3>
+      <span class="count">{{ history.length }} shifts</span>
+    </div>
+    @if (history.length === 0) {
+      <div class="empty-sm">No shifts recorded yet.</div>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Cashier</th><th>Opened</th><th>Closed</th><th>Duration</th>
+              <th class="num">Float</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of history; track s.id) {
+              <tr>
+                <td>{{ s.id }}</td>
+                <td>{{ s.userName }}</td>
+                <td>{{ s.openTime | date:'short' }}</td>
+                <td>{{ s.closeTime ? (s.closeTime | date:'short') : '—' }}</td>
+                <td>{{ hoursBetween(s) }}</td>
+                <td class="num">{{ s.openingFloat | inr }}</td>
+                <td>
+                  <span class="badge" [class.ok]="s.status === 'Closed'" [class.warn]="s.status !== 'Closed'">{{ s.status }}</span>
+                </td>
+                <td class="act">
+                  <button class="btn-mini" (click)="viewZReport(s.id)">Z-report</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+}
+
+<!-- Z-report modal -->
+@if (showZReport) {
+  <div class="modal-backdrop" (click)="closeZReport()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h3>Z-Report</h3>
+        <button class="x" (click)="closeZReport()">×</button>
+      </div>
+      @if (zLoading) {
+        <div class="empty-sm"><span class="spin"></span> Generating report…</div>
+      } @else if (zReport) {
+        <div class="z-body">
+          <div class="z-meta">
+            <span><b>Cashier</b> {{ zReport.userName }}</span>
+            <span><b>Shift</b> #{{ zReport.shiftId }}</span>
+            <span><b>Opened</b> {{ zReport.openTime | date:'short' }}</span>
+            <span><b>Closed</b> {{ zReport.closeTime ? (zReport.closeTime | date:'short') : '—' }}</span>
+          </div>
+          <div class="z-rows">
+            <div class="z-row"><span>Orders</span><b>{{ zReport.orderCount }}</b></div>
+            <div class="z-row"><span>Gross sales</span><b>{{ zReport.grossSales | inr }}</b></div>
+            <div class="z-row"><span>Discounts</span><b>−{{ zReport.discounts | inr }}</b></div>
+            <div class="z-row"><span>Taxes</span><b>{{ zReport.taxes | inr }}</b></div>
+            <div class="z-row total"><span>Net sales</span><b>{{ zReport.netSales | inr }}</b></div>
+            <div class="z-div"></div>
+            <div class="z-row"><span>Opening float</span><b>{{ zReport.openingFloat | inr }}</b></div>
+            <div class="z-row"><span>Expected cash</span><b>{{ zReport.cashExpected | inr }}</b></div>
+            <div class="z-row"><span>Counted cash</span><b>{{ zReport.cashCounted | inr }}</b></div>
+            <div class="z-row total" [class.pos]="zReport.variance > 0" [class.neg]="zReport.variance < 0">
+              <span>Variance</span><b>{{ zReport.variance | inr }}</b>
+            </div>
+          </div>
+        </div>
+      }
+      <div class="modal-foot">
+        <button class="btn btn-ghost" (click)="closeZReport()">Close</button>
+        <button class="btn btn-primary" onclick="window.print()">Print</button>
+      </div>
+    </div>
+  </div>
+}

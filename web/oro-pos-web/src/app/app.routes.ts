@@ -6,6 +6,7 @@ import { PosComponent } from './components/pos/pos.component';
 import { KitchenComponent } from './components/kitchen/kitchen.component';
 import { TablesComponent } from './components/tables/tables.component';
 import { ReportsComponent } from './components/reports/reports.component';
+import { ShiftsComponent } from './components/shifts/shifts.component';
 import { InventoryComponent } from './components/inventory/inventory.component';
 import { MenuComponent } from './components/menu/menu.component';
 import { StaffComponent } from './components/staff/staff.component';
@@ -26,6 +27,7 @@ export const routes: Routes = [
       { path: 'inventory', component: InventoryComponent },
       { path: 'menu', component: MenuComponent },
       { path: 'reports', component: ReportsComponent },
+      { path: 'shifts', component: ShiftsComponent },
       { path: 'staff', component: StaffComponent },
     ]
   },

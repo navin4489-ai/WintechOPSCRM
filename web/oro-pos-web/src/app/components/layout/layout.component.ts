@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { CommonModule } from '@angular/common';
+import { ToastComponent } from '../toast/toast.component';
 
 interface NavItem {
   path: string;
@@ -13,7 +14,7 @@ interface NavItem {
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, ToastComponent],
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.css']
 })
@@ -29,6 +30,7 @@ export class LayoutComponent {
     { path: '/inventory', label: 'Inventory', icon: 'inventory' },
     { path: '/menu', label: 'Menu & Catalogue', icon: 'menu' },
     { path: '/reports', label: 'Reports', icon: 'reports' },
+    { path: '/shifts', label: 'Shifts', icon: 'shifts' },
     { path: '/staff', label: 'Staff', icon: 'staff' },
   ];
 

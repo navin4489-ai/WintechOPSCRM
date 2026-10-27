@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
 import { TableDto, ProductDto, OrderItemRequest, CreateOrderRequest, OrderDto, ApiResponse } from '../../models';
 import { InrPipe } from '../../pipes/inr.pipe';
 
@@ -33,7 +34,11 @@ export class PosComponent implements OnInit {
 
   taxRate = 0.05; // 5% GST
 
-  constructor(private api: ApiService, private auth: AuthService) { this.user = this.auth.getCurrentUser(); }
+  constructor(private api: ApiService, private auth: AuthService, private toast: ToastService) { this.user = this.auth.getCurrentUser(); }
+
+  private errMsg(err: any, fallback: string): string {
+    return err?.error?.errors?.[0] || err?.error?.message || fallback;
+  }
 
   ngOnInit() {
     const outletId = this.user?.outletId;
@@ -78,35 +83,48 @@ export class PosComponent implements OnInit {
       serviceType: 'DineIn',
       items: []
     };
-    this.api.createOrder(req).subscribe((res: ApiResponse<OrderDto>) => {
-      if (res.success && res.data) {
-        this.currentOrder = res.data as OrderDto;
-        this.orderItems = res.data.orderItems;
-        this.calculateTotals();
+    this.api.createOrder(req).subscribe({
+      next: (res: ApiResponse<OrderDto>) => {
+        if (res.success && res.data) {
+          this.currentOrder = res.data as OrderDto;
+          this.orderItems = res.data.orderItems;
+          this.calculateTotals();
+        }
+      },
+      error: (err) => {
+        const m = this.errMsg(err, 'Could not start an order for this table.');
+        this.toast.error(m);
+        if (/shift/i.test(m)) this.toast.info('Open a shift from the Shifts page, then try again.');
       }
     });
   }
 
   addItem(p: ProductDto) {
-    if (!this.currentOrder) { alert('Select a table first to start an order.'); return; }
+    if (!this.currentOrder) { this.toast.warning('Select a table first to start an order.'); return; }
     const item: OrderItemRequest = { productId: p.id, quantity: 1, modifierOptionIds: [], notes: '' };
-    this.api.addOrderItem(this.currentOrder.id, item).subscribe((res: ApiResponse<OrderDto>) => {
-      if (res.success && res.data) {
-        this.currentOrder = res.data as OrderDto;
-        this.orderItems = res.data.orderItems;
-        this.calculateTotals();
-      }
+    this.api.addOrderItem(this.currentOrder.id, item).subscribe({
+      next: (res: ApiResponse<OrderDto>) => {
+        if (res.success && res.data) {
+          this.currentOrder = res.data as OrderDto;
+          this.orderItems = res.data.orderItems;
+          this.calculateTotals();
+        }
+      },
+      error: (err) => this.toast.error(this.errMsg(err, `Could not add ${p.name}.`))
     });
   }
 
   removeItem(index: number) {
     const item = this.orderItems[index];
-    this.api.removeOrderItem(this.currentOrder!.id, item.id).subscribe((res: ApiResponse<OrderDto>) => {
-      if (res.success && res.data) {
-        this.currentOrder = res.data as OrderDto;
-        this.orderItems = res.data.orderItems;
-        this.calculateTotals();
-      }
+    this.api.removeOrderItem(this.currentOrder!.id, item.id).subscribe({
+      next: (res: ApiResponse<OrderDto>) => {
+        if (res.success && res.data) {
+          this.currentOrder = res.data as OrderDto;
+          this.orderItems = res.data.orderItems;
+          this.calculateTotals();
+        }
+      },
+      error: (err) => this.toast.error(this.errMsg(err, 'Could not remove item.'))
     });
   }
 
@@ -117,7 +135,7 @@ export class PosComponent implements OnInit {
   }
 
   openPaymentModal() {
-    if (!this.currentOrder || this.orderItems.length === 0) { alert('Add items before taking payment.'); return; }
+    if (!this.currentOrder || this.orderItems.length === 0) { this.toast.warning('Add items before taking payment.'); return; }
     this.amountReceived = this.total;
     this.tenderType = 'Cash';
     this.showPayment = true;
@@ -127,6 +145,7 @@ export class PosComponent implements OnInit {
 
   confirmPayment() {
     if (this.processing) return;
+    if (this.amountReceived < this.total) { this.toast.warning('Amount received is less than the order total.'); return; }
     this.processing = true;
     const req = { orderId: this.currentOrder!.id, tenderType: this.tenderType, amount: this.amountReceived };
     this.api.processPayment(this.currentOrder!.id, req).subscribe({
@@ -141,22 +160,31 @@ export class PosComponent implements OnInit {
           // refresh table occupancy
           const outletId = this.user?.outletId;
           this.api.getTables(outletId).subscribe((r: ApiResponse<TableDto[]>) => { if (r.success) this.tables = r.data || []; });
-          alert('Payment processed — order closed.');
+          this.toast.success('Payment processed — order closed.');
         }
       },
-      error: () => { this.processing = false; alert('Payment failed. Please try again.'); }
+      error: (err) => { this.processing = false; this.toast.error(this.errMsg(err, 'Payment failed. Please try again.')); }
     });
   }
 
   voidOrder() {
     if (!this.currentOrder) return;
-    if (!confirm('Void this order?')) return;
-    this.api.voidOrder(this.currentOrder.id, { orderId: this.currentOrder.id, reason: 'Customer request' }).subscribe((res: ApiResponse<OrderDto>) => {
-      if (res.success) {
-        this.currentOrder = res.data as OrderDto;
-        this.orderItems = [];
-        this.calculateTotals();
-      }
+    const reason = window.prompt('Reason for voiding this order (required):', 'Customer request');
+    if (reason === null) return;                    // cancelled
+    if (!reason.trim()) { this.toast.warning('A reason is required to void an order.'); return; }
+    this.api.voidOrder(this.currentOrder.id, { orderId: this.currentOrder.id, reason: reason.trim() }).subscribe({
+      next: (res: ApiResponse<OrderDto>) => {
+        if (res.success) {
+          this.currentOrder = null;
+          this.orderItems = [];
+          this.subtotal = this.tax = this.total = 0;
+          this.selectedTableId = null;
+          const outletId = this.user?.outletId;
+          this.api.getTables(outletId).subscribe((r: ApiResponse<TableDto[]>) => { if (r.success) this.tables = r.data || []; });
+          this.toast.success('Order voided.');
+        }
+      },
+      error: (err) => this.toast.error(this.errMsg(err, 'Could not void the order.'))
     });
   }
 }
