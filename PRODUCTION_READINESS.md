@@ -3,7 +3,7 @@
 ## Verified in this pass
 
 - API and Angular production builds succeed.
-- 37 backend tests pass in Release, including checkout/accounting regression tests in
+- 42 backend tests pass in Release, including checkout/accounting regression tests in
   `backend/ORO_POS.Tests/CheckoutTests.cs`.
 - Checkout persists the platform's existing 5% GST policy, rounded to paise.
 - Discounts update persisted GST/total; sales reports do not deduct discounts twice.
@@ -40,6 +40,8 @@ integration, hardware printing, security isolation, or load capacity.
 - Public, no-login QR ordering supports server-priced carts, retry-safe request IDs,
   private order-status proofs and cash-at-outlet collection by authenticated staff.
   Links can be disabled or rotated. Closed outlets or missing shifts reject new orders.
+- QR checkout requires a validated customer contact number. It is included only
+  in authenticated staff order notes, not the public confirmation/tracking DTO.
 - Product photos use a dedicated PostgreSQL `ProductImages` table and additive EF
   migration. The API accepts PNG/JPEG/WebP up to 1 MB, checks file signatures and
   outlet permissions, audits changes and serves versioned cacheable image URLs.
@@ -62,8 +64,9 @@ integration, hardware printing, security isolation, or load capacity.
 - Inventory validates movements; physical counts post the difference, not the absolute count.
 - New production databases require an initial admin password; demo seeding is opt-in
   (`SEED_DEMO_DATA=true`). `RESET_DB_ON_START` is false in the blueprint.
-- Validation workflow added under `.github/workflows/validate.yml`. This workflow
-  must still be observed running successfully in GitHub, not merely assumed green.
+- Validation workflow added under `.github/workflows/validate.yml`. The initial
+  clean-install failure exposed an inconsistent npm lockfile; it was repaired.
+  The run for `d4f1631` completed successfully for API, web and Android UI checks.
 - `scripts/backup-database.ps1` provides an isolated `oro_pos` dump path; it has not
   been executed or restore-tested and is not an automatic backup service.
 
@@ -73,6 +76,24 @@ integration, hardware printing, security isolation, or load capacity.
   capture is not part of this release.
 - Keep the current free Render environment **for testing**. No billing upgrade or
   production-hosting purchase was authorized or performed.
+
+## QR and item-image live checks
+
+- Main Outlet QR ordering was enabled, and its PNG was saved locally at
+  `mobile/releases/Main-Outlet-QR.png`. Download the current code from Super Admin
+  again if the link is rotated; generated outlet QR files are not committed.
+- Anonymous menu returned 20 available products with cash-at-outlet instructions.
+- Browser cart validation showed 280 INR subtotal, 14 INR GST and 294 INR total for
+  Paneer Tikka, and blocked checkout without the customer's name.
+- QA guest order #19 used server pricing despite a client-supplied zero price.
+  Repeating its request ID returned the same order. An unauthenticated attempt to
+  pay returned 401. The unpaid QA order was immediately voided; no cash or stock moved.
+- Product #21 (`QA image validation - not for sale`) was created unavailable for
+  media tests. Upload through the web item section rendered a 392×392 thumbnail;
+  anonymous image GET returned PNG, and an ETag request returned 304. The QA image
+  was removed after testing; the unavailable QA item remains as an audit/test record.
+- No real product photo was overwritten, and no existing user's cash shift was
+  opened, closed or changed during these checks.
 
 ## Release blockers / remaining acceptance work
 

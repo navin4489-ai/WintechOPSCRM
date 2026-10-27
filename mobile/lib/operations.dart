@@ -981,7 +981,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
               formatInr(money(r['price'])),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-            if (api.can('ManageSettings'))
+            if (api.canManageCatalogue)
               PopupMenuButton<String>(
                 onSelected: (value) {
                   if (value == 'edit') {
@@ -1188,7 +1188,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
             ]
           : [],
     'Catalogue' =>
-      api.can('ManageSettings')
+      api.canManageCatalogue
           ? [
               FilledButton.icon(
                 onPressed: busy ? null : addProduct,

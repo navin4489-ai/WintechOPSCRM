@@ -48,6 +48,8 @@ class ApiService {
   bool can(String permission) =>
       user?.roleName == 'Owner' ||
       (user?.permissions.contains(permission) ?? false);
+  bool get canManageCatalogue =>
+      can('ManageSettings') || user?.roleName == 'StoreManager';
 
   Future<void> init() async {
     // Remove insecure credentials stored by earlier app versions. Require sign-in

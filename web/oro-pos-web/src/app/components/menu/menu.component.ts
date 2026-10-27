@@ -20,7 +20,7 @@ export class MenuComponent implements OnInit {
   editing: any = null;
   busy = false;
   uploadingId: number | null = null;
-  get canEdit() { const u=this.auth.getCurrentUser(); return u?.roleName==='Owner'||!!u?.permissions?.includes('ManageSettings'); }
+  get canEdit() { const u=this.auth.getCurrentUser(); return u?.roleName==='Owner'||u?.roleName==='StoreManager'||!!u?.permissions?.includes('ManageSettings'); }
 
   constructor(private api: ApiService, private auth: AuthService, private toast: ToastService) {}
 

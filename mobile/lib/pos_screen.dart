@@ -617,6 +617,11 @@ class _PosScreenState extends State<PosScreen> {
         Text(
           '${order!['serviceType']} · ${order!['status']} · Table ${order!['tableNumber'] ?? '—'}',
         ),
+        if (order!['notes'] != null && '${order!['notes']}'.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: SelectableText('${order!['notes']}'),
+          ),
         const SizedBox(height: 16),
         ...items.map(
           (i) => Card(

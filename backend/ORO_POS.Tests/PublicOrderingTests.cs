@@ -25,7 +25,7 @@ public class PublicOrderingTests : IDisposable
         orders = new(db,new InventoryService(db),new KitchenService(db));
         guest = new(db,orders,new MenuService(db),new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["Jwt:Key"]="test-only-signing-key-with-at-least-32-bytes"}).Build());
     }
-    private static GuestOrderRequest Request() => new() { RequestId=Guid.NewGuid(),CustomerName="QA guest",Items=new(){new OrderItemRequest{ProductId=1,Quantity=2,ModifierOptionIds=new()}} };
+    private static GuestOrderRequest Request() => new() { RequestId=Guid.NewGuid(),CustomerName="QA guest",CustomerPhone="+91 99999 99999",Items=new(){new OrderItemRequest{ProductId=1,Quantity=2,ModifierOptionIds=new()}} };
     [Fact] public async Task MenuIsAnonymousSafeAndIncludesAvailability()
     { var menu=await guest.GetMenuAsync(Key);Assert.Equal("QR outlet",menu.OutletName);Assert.True(menu.AcceptingOrders);Assert.Single(menu.Products); }
     [Fact] public async Task GuestOrderUsesServerPricesRemainsUnpaidAndRetryIsIdempotent()
@@ -34,6 +34,8 @@ public class PublicOrderingTests : IDisposable
         Assert.Equal(first.OrderNumber,second.OrderNumber);Assert.Equal(200,first.Subtotal);Assert.Equal(10,first.TaxAmount);Assert.Equal(210,first.TotalAmount);
         Assert.Equal("Open",first.Status);Assert.Empty(await db.Payments.ToListAsync());Assert.Single(await db.Orders.ToListAsync());
         Assert.Contains("CASH AT OUTLET",(await db.Orders.SingleAsync()).Notes);Assert.Single(await db.KitchenTickets.ToListAsync());
+        Assert.Contains("Contact: +919999999999",(await db.Orders.SingleAsync()).Notes);
+        Assert.DoesNotContain("9999999999",System.Text.Json.JsonSerializer.Serialize(first));
     }
     [Fact] public async Task ClosedOutletAndMissingShiftDoNotCreateOrders()
     {
@@ -70,6 +72,19 @@ public class PublicOrderingTests : IDisposable
     {
         db.Outlets.Add(new Outlet{Id=2,Name="Other"});db.Roles.Add(new Role{Id=2,Name="StoreManager",Permissions="[\"ManageSettings\"]"});db.Users.Add(new User{Id=2,Username="other-manager",RoleId=2,OutletId=2,IsActive=true});await db.SaveChangesAsync();
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>new ProductImageService(db).SaveAsync(1,new byte[30],2));Assert.Empty(await db.ProductImages.ToListAsync());
+    }
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("123")]
+    [InlineData("1234567890123456")]
+    public async Task GuestContactMustBeValid(string phone)
+    { var request=Request();request.CustomerPhone=phone;await Assert.ThrowsAsync<InvalidOperationException>(()=>guest.PlaceAsync(Key,request));Assert.Empty(await db.Orders.ToListAsync()); }
+    [Fact] public async Task OutletManagerCanUploadOwnItemWithoutPlatformSettingsPermission()
+    {
+        db.Roles.Add(new Role{Id=2,Name="StoreManager",Permissions="[]"});db.Users.Add(new User{Id=2,Username="outlet-admin",RoleId=2,OutletId=1,IsActive=true});await db.SaveChangesAsync();
+        var png=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=");
+        Assert.StartsWith("/api/products/1/image",await new ProductImageService(db).SaveAsync(1,png,2));
     }
     public void Dispose()=>db.Dispose();
 }

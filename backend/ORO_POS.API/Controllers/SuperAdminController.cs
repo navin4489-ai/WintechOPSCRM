@@ -22,6 +22,7 @@ public class SuperAdminController(AppDbContext db, IOutletService outlets, IConf
     [HttpPost("{id:int}/ordering")]
     public async Task<IActionResult> Configure(int id, OrderingSettingsRequest request)
     {
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable) : null;
         await RequireOutlet(id);
         var device = await Device(id);
         if (device == null) { device = new DeviceConfig { OutletId = id, StationType = "PublicOrdering", DeviceName = NewName() }; db.DeviceConfigs.Add(device); }
@@ -29,6 +30,7 @@ public class SuperAdminController(AppDbContext db, IOutletService outlets, IConf
         device.IsActive = request.Enabled;
         db.AuditLogs.Add(new AuditLog { ActorId = UserId, Entity = "Outlet", EntityId = id, Action = "ConfigurePublicOrdering", Reason = $"Cash-at-outlet QR ordering enabled={request.Enabled}; link rotated={request.RotateKey}." });
         await db.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
         return Ok(new ApiResponse<object> { Success = true, Data = Result(device) });
     }
     private static string NewName() => "PublicOrdering-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();

@@ -23,7 +23,7 @@ public class CategoriesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateCategoryRequest request)
     {
         var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
-        if (!can) return Forbid();
+        if (!can && !User.IsInRole("StoreManager")) return Forbid();
         var created = await _menu.CreateCategoryAsync(request, GetUserId());
         return CreatedAtAction(nameof(GetByOutlet), new { outletId = request.OutletId }, new ApiResponse<CategoryDto> { Success = true, Data = created });
     }
@@ -49,7 +49,7 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateProductRequest request)
     {
         var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
-        if (!can) return Forbid();
+        if (!can && !User.IsInRole("StoreManager")) return Forbid();
         var created = await _menu.CreateProductAsync(request, GetUserId());
         return CreatedAtAction(nameof(Get), new { outletId = request.OutletId }, new ApiResponse<ProductDto> { Success = true, Data = created });
     }
@@ -100,7 +100,7 @@ public class ModifierGroupsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateModifierGroupRequest request)
     {
         var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
-        if (!can) return Forbid();
+        if (!can && !User.IsInRole("StoreManager")) return Forbid();
         var created = await _menu.CreateModifierGroupAsync(request, GetUserId());
         return CreatedAtAction(nameof(GetByOutlet), new { outletId = request.OutletId }, new ApiResponse<ModifierGroupDto> { Success = true, Data = created });
     }

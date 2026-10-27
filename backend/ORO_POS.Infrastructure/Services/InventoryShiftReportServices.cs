@@ -464,7 +464,12 @@ public class ReportService : IReportService
     public async Task<List<AuditLogDto>> GetAuditLogsAsync(int? outletId, PagedRequest request, int userId)
     {
         var query = _db.AuditLogs.Include(a => a.Actor).Where(a => !a.IsDeleted);
-        if (outletId.HasValue) query = query.Where(a => a.Actor != null && a.Actor.OutletId == outletId.Value);
+        if (outletId.HasValue) query = query.Where(a =>
+            a.Entity == "Order" ? _db.Orders.Any(o => o.Id == a.EntityId && o.OutletId == outletId.Value) :
+            a.Entity == "Product" ? _db.Products.Any(p => p.Id == a.EntityId && p.OutletId == outletId.Value) :
+            a.Entity == "Outlet" ? a.EntityId == outletId.Value :
+            a.Entity == "User" ? _db.Users.Any(u => u.Id == a.EntityId && u.OutletId == outletId.Value) :
+            a.Actor != null && a.Actor.OutletId == outletId.Value);
         var total = await query.CountAsync();
         var items = await query.OrderByDescending(a => a.CreatedAt).Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
             .Select(a => new AuditLogDto

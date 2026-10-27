@@ -5,6 +5,7 @@ public class GuestOrderRequest
 {
     public Guid RequestId { get; set; }
     [Required, StringLength(80, MinimumLength = 1)] public string CustomerName { get; set; } = "";
+    [Required, StringLength(24)] public string CustomerPhone { get; set; } = "";
     [StringLength(500)] public string? Notes { get; set; }
     public List<OrderItemRequest> Items { get; set; } = new();
 }

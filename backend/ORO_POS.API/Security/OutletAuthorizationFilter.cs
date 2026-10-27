@@ -44,7 +44,8 @@ public sealed class OutletAuthorizationFilter(AppDbContext db) : IAsyncActionFil
             _ => null
         };
         var permissions = JsonSerializer.Deserialize<string[]>(user.Role.Permissions ?? "[]") ?? [];
-        if (!owner && permission != null && !permissions.Contains(permission))
+        var outletCatalogueAdmin = user.Role.Name == "StoreManager" && new[] {"Products","Categories","ModifierGroups"}.Contains(controller);
+        if (!owner && !outletCatalogueAdmin && permission != null && !permissions.Contains(permission))
         { context.Result = new ForbidResult(); return; }
         if (controller == "Orders" && action == "Receipt" && !owner && !permissions.Contains("EditOrder") && !permissions.Contains("ViewReports"))
         { context.Result = new ForbidResult(); return; }

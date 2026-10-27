@@ -21,7 +21,7 @@ public class ProductImageService(AppDbContext db)
         var product = await db.Products.FindAsync(id) ?? throw new KeyNotFoundException("Product not found.");
         var actor = await db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive)
             ?? throw new UnauthorizedAccessException("User not found.");
-        if (actor.Role?.Name != "Owner" && (actor.OutletId != product.OutletId || !(JsonSerializer.Deserialize<string[]>(actor.Role?.Permissions ?? "[]") ?? []).Contains("ManageSettings")))
+        if (actor.Role?.Name != "Owner" && (actor.OutletId != product.OutletId || (actor.Role?.Name != "StoreManager" && !(JsonSerializer.Deserialize<string[]>(actor.Role?.Permissions ?? "[]") ?? []).Contains("ManageSettings"))))
             throw new UnauthorizedAccessException("Only authorized outlet administrators can upload item images.");
         return product;
     }

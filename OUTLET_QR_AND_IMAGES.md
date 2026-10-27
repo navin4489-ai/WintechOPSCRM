@@ -19,7 +19,7 @@ escalate to platform administration merely by calling the endpoint directly.
 
 - Web: **Menu & Catalogue → Add item / Edit → Save**, then **Upload image** on the row.
 - Android: **Catalogue → item three-dot menu → Upload image**, choose from the gallery.
-- Authorized outlet administrators with `ManageSettings` can upload/replace/remove
+- Outlet administrators (`StoreManager`) or holders of `ManageSettings` can upload/replace/remove
   photos for their own outlet only. Owner can administer every outlet.
 - Supported uploads: PNG, JPEG or WebP, maximum **1 MB**. SVG/documents are rejected.
 - Photos are saved in PostgreSQL, not the ephemeral Render filesystem. Database
@@ -31,7 +31,10 @@ escalate to platform administration merely by calling the endpoint directly.
 
 1. Scan the outlet QR using the phone's camera.
 2. Browse images/categories, choose quantities/modifiers and add kitchen notes.
-3. Enter a pickup name and submit. The server validates current product prices,
+3. Enter a pickup name and contact number, then submit. The contact is visible only
+   in authenticated staff order details and is not included in public tracking.
+   The pending contact is kept in that browser tab until checkout succeeds.
+   The server validates current product prices,
    availability, modifier rules and GST. Client-supplied prices are never trusted.
 4. The confirmation shows a pickup code, confirmed total and **Pay cash at the outlet**.
    No online payment or card details are taken.

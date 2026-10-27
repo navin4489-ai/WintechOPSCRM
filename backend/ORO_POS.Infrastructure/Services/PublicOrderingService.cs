@@ -34,6 +34,11 @@ public class PublicOrderingService(AppDbContext db, IOrderService orders, IMenuS
         if (request.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(request.CustomerName) || request.CustomerName.Length > 80
             || request.Items.Count == 0 || request.Items.Count > 30 || request.Items.Any(i => i.Quantity < 1 || i.Quantity > 20 || (i.Notes?.Length ?? 0) > 500))
             throw new InvalidOperationException("Enter a name and a valid cart of up to 30 items (1–20 units each).");
+        var phone = new string(request.CustomerPhone.Where(c => c >= '0' && c <= '9').ToArray());
+        if (phone.Length < 7 || phone.Length > 15 || request.CustomerPhone.Length > 24 || request.CustomerPhone.Count(c=>c=='+')>1
+            || (request.CustomerPhone.Contains('+') && !request.CustomerPhone.TrimStart().StartsWith('+')) || request.CustomerPhone.Any(c => !(c >= '0' && c <= '9') && !"+ ()-".Contains(c)))
+            throw new InvalidOperationException("Enter a valid contact number containing 7–15 digits, with an optional country code.");
+        if (request.CustomerPhone.TrimStart().StartsWith('+')) phone = "+" + phone;
         // The unguessable request ID is also the retry key. Never capture payment
         // or accept client prices, discounts, outlet IDs, table IDs or staff IDs.
         var existing = await db.Orders.FirstOrDefaultAsync(o => o.OrderNumber == $"WEB-{request.RequestId:N}");
@@ -48,7 +53,7 @@ public class PublicOrderingService(AppDbContext db, IOrderService orders, IMenuS
             ?? throw new InvalidOperationException("This outlet is not accepting orders yet. Please contact the outlet.");
         var created = await orders.CreateOrderAsync(new CreateOrderRequest {
             ClientRequestId = request.RequestId, OutletId = outlet.Id, ServiceType = "Takeaway",
-            Notes = $"[PUBLIC QR · CASH AT OUTLET] Customer: {request.CustomerName.Trim()}\n{request.Notes?.Trim()}", Items = request.Items
+            Notes = $"[PUBLIC QR · CASH AT OUTLET] Customer: {request.CustomerName.Trim()}\nContact: {phone}\n{request.Notes?.Trim()}", Items = request.Items
         }, shift.UserId);
         db.AuditLogs.Add(new AuditLog { ActorId = null, Entity = "Order", EntityId = created.Id, Action = "GuestOrderSubmitted", Reason = "Public outlet QR order. Unpaid; collect cash at the outlet." });
         await db.SaveChangesAsync();

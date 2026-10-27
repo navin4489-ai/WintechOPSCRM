@@ -70,6 +70,12 @@ public class OutletService : IOutletService
         if (dto.Name.Length == 0 || dto.Name.Length > 120 || (dto.Address?.Length ?? 0) > 500 || (dto.Phone?.Length ?? 0) > 40)
             throw new InvalidOperationException("Enter a valid outlet name, address and phone.");
         if (dto.Currency != "INR") throw new InvalidOperationException("This POS deployment uses INR.");
+        if (!string.IsNullOrWhiteSpace(dto.Phone))
+        {
+            var digits = dto.Phone.Count(c => c >= '0' && c <= '9');
+            if (digits < 7 || digits > 15 || dto.Phone.Any(c => !(c >= '0' && c <= '9') && !"+ ()-".Contains(c)))
+                throw new InvalidOperationException("Enter an outlet contact number containing 7–15 digits.");
+        }
         try { TimeZoneInfo.FindSystemTimeZoneById(dto.Timezone); } catch { throw new InvalidOperationException("Enter a valid timezone, for example Asia/Kolkata."); }
     }
 }
