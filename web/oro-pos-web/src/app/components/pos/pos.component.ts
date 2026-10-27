@@ -20,7 +20,7 @@ export class PosComponent implements OnInit {
   filteredProducts: ProductDto[] = [];
   currentOrder: OrderDto | null = null;
   orderItems: any[] = [];
-  subtotal = 0; tax = 0; total = 0;
+  subtotal = 0; tax = 0; total = 0; discount = 0;
   user: any;
   outlet: any;
   selectedTableId: number | null = null;
@@ -31,6 +31,13 @@ export class PosComponent implements OnInit {
   tenderType = 'Cash';
   amountReceived = 0;
   processing = false;
+
+  // Discount modal
+  showDiscount = false;
+  discountMode: 'amount' | 'percent' = 'amount';
+  discountValue: number | null = 0;
+  discountReason = '';
+  applyingDiscount = false;
 
   taxRate = 0.05; // 5% GST
 
@@ -130,8 +137,42 @@ export class PosComponent implements OnInit {
 
   calculateTotals() {
     this.subtotal = this.orderItems.reduce((s: number, i: any) => s + i.lineTotal, 0);
-    this.tax = this.subtotal * this.taxRate;
-    this.total = this.subtotal + this.tax;
+    this.discount = this.currentOrder?.discountAmount ?? 0;
+    this.tax = (this.subtotal - this.discount) * this.taxRate;
+    this.total = this.subtotal - this.discount + this.tax;
+  }
+
+  openDiscountModal() {
+    if (!this.currentOrder || this.orderItems.length === 0) { this.toast.warning('Add items before applying a discount.'); return; }
+    this.discountMode = 'amount';
+    this.discountValue = 0;
+    this.discountReason = '';
+    this.showDiscount = true;
+  }
+
+  closeDiscount() { this.showDiscount = false; }
+
+  applyDiscount() {
+    if (this.applyingDiscount || !this.currentOrder) return;
+    const val = Number(this.discountValue ?? 0);
+    if (val <= 0) { this.toast.warning('Enter a discount greater than zero.'); return; }
+    const req: any = this.discountMode === 'percent'
+      ? { percent: val, reason: this.discountReason || 'Discount applied' }
+      : { amount: val, reason: this.discountReason || 'Discount applied' };
+    this.applyingDiscount = true;
+    this.api.applyDiscount(this.currentOrder.id, req).subscribe({
+      next: (res) => {
+        this.applyingDiscount = false;
+        if (res.success && res.data) {
+          this.currentOrder = res.data as OrderDto;
+          this.orderItems = res.data.orderItems;
+          this.calculateTotals();
+          this.showDiscount = false;
+          this.toast.success(`Discount of ₹${(res.data.discountAmount ?? 0).toFixed(2)} applied.`);
+        }
+      },
+      error: (err) => { this.applyingDiscount = false; this.toast.error(this.errMsg(err, 'Could not apply discount.')); }
+    });
   }
 
   openPaymentModal() {
@@ -155,7 +196,7 @@ export class PosComponent implements OnInit {
           this.showPayment = false;
           this.currentOrder = null;
           this.orderItems = [];
-          this.subtotal = this.tax = this.total = 0;
+          this.subtotal = this.tax = this.total = this.discount = 0;
           this.selectedTableId = null;
           // refresh table occupancy
           const outletId = this.user?.outletId;
@@ -177,7 +218,7 @@ export class PosComponent implements OnInit {
         if (res.success) {
           this.currentOrder = null;
           this.orderItems = [];
-          this.subtotal = this.tax = this.total = 0;
+          this.subtotal = this.tax = this.total = this.discount = 0;
           this.selectedTableId = null;
           const outletId = this.user?.outletId;
           this.api.getTables(outletId).subscribe((r: ApiResponse<TableDto[]>) => { if (r.success) this.tables = r.data || []; });

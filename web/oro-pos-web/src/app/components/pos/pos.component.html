@@ -54,6 +54,7 @@
 
       <div class="order-totals">
         <div class="row"><span>Subtotal</span><span>{{ subtotal | inr }}</span></div>
+        <div class="row discount" *ngIf="discount > 0"><span>Discount</span><span>−{{ discount | inr }}</span></div>
         <div class="row"><span>GST ({{ taxRate * 100 }}%)</span><span>{{ tax | inr }}</span></div>
         <div class="row total"><span>Grand Total</span><span>{{ total | inr }}</span></div>
       </div>
@@ -63,6 +64,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
           Process Payment
         </button>
+        <button class="btn-ghost" (click)="openDiscountModal()" [disabled]="!orderItems.length">Discount</button>
         <button class="btn-danger" (click)="voidOrder()" [disabled]="!currentOrder">Void</button>
       </div>
     </section>
@@ -126,6 +128,48 @@
       <button class="secondary" (click)="closePayment()">Cancel</button>
       <button class="btn-success" (click)="confirmPayment()" [disabled]="processing || amountReceived < total">
         @if (processing) { Processing… } @else { Confirm — {{ total | inr }} }
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Discount Modal -->
+<div class="modal-backdrop" *ngIf="showDiscount" (click)="closeDiscount()">
+  <div class="modal fade-in" (click)="$event.stopPropagation()">
+    <div class="modal-head">
+      <h3>Apply Discount</h3>
+      <button class="modal-close" (click)="closeDiscount()">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Type</label>
+        <div class="tender-row">
+          <button type="button" class="tender" [class.active]="discountMode === 'amount'" (click)="discountMode = 'amount'">Flat ₹</button>
+          <button type="button" class="tender" [class.active]="discountMode === 'percent'" (click)="discountMode = 'percent'">Percent %</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>{{ discountMode === 'percent' ? 'Discount %' : 'Discount Amount (₹)' }}</label>
+        <input type="number" [(ngModel)]="discountValue" min="0" step="0.01" [max]="discountMode === 'percent' ? 100 : subtotal" />
+      </div>
+
+      <div class="form-group">
+        <label>Reason (optional)</label>
+        <input type="text" [(ngModel)]="discountReason" placeholder="e.g. Promo, loyalty, manager comp" />
+      </div>
+
+      <div class="change-row">
+        <span>New total after discount + GST</span>
+        <strong>{{ (subtotal - (discountValue || 0)) + ((subtotal - (discountValue || 0)) * taxRate) | inr }}</strong>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="secondary" (click)="closeDiscount()">Cancel</button>
+      <button class="btn-primary" (click)="applyDiscount()" [disabled]="applyingDiscount || !discountValue">
+        @if (applyingDiscount) { Applying… } @else { Apply Discount }
       </button>
     </div>
   </div>

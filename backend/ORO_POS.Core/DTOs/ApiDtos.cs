@@ -302,6 +302,15 @@ public class VoidOrderRequest
     public int? ApprovedByUserId { get; set; }
 }
 
+public class ApplyDiscountRequest
+{
+    /// <summary>Flat discount amount in currency units. Ignored when <see cref="Percent"/> is set.</summary>
+    public decimal Amount { get; set; }
+    /// <summary>Optional percentage discount (0-100) applied to the subtotal.</summary>
+    public decimal? Percent { get; set; }
+    public string? Reason { get; set; }
+}
+
 // Kitchen Ticket DTOs
 public class KitchenTicketDto
 {

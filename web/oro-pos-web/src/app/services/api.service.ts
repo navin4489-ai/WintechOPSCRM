@@ -7,7 +7,7 @@ import {
   ProductDto, CreateProductRequest, ModifierGroupDto, CreateModifierGroupRequest,
   TableDto, CreateTableRequest, ZoneDto, CreateZoneRequest,
   OrderDto, CreateOrderRequest, OrderItemRequest, PagedRequest, PagedResult,
-  ProcessPaymentRequest, VoidOrderRequest,
+  ProcessPaymentRequest, VoidOrderRequest, ApplyDiscountRequest,
   KitchenTicketDto, UpdateTicketStatusRequest,
   ProductStockDto, RecordInventoryRequest, InventoryLedgerDto,
   RecipeDto, CreateRecipeRequest,
@@ -101,6 +101,9 @@ export class ApiService {
   }
   voidOrder(orderId: number, req: VoidOrderRequest): Observable<ApiResponse<OrderDto>> {
     return this.http.post<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}/void`, req);
+  }
+  applyDiscount(orderId: number, req: ApplyDiscountRequest): Observable<ApiResponse<OrderDto>> {
+    return this.http.post<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}/discount`, req);
   }
   addOrderItem(orderId: number, item: OrderItemRequest): Observable<ApiResponse<OrderDto>> {
     return this.http.post<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}/items`, item);

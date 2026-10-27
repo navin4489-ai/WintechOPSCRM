@@ -171,6 +171,12 @@ export interface VoidOrderRequest {
   approvedByUserId?: number;
 }
 
+export interface ApplyDiscountRequest {
+  amount?: number;
+  percent?: number;
+  reason?: string;
+}
+
 export interface KitchenTicketDto {
   id: number;
   orderId: number;

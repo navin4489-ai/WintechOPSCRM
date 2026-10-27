@@ -203,6 +203,57 @@ public class OrderService : IOrderService
         return await GetOrderByIdAsync(orderId, userId);
     }
 
+    public async Task<OrderDto> ApplyDiscountAsync(int orderId, ApplyDiscountRequest request, int userId)
+    {
+        var order = await _db.Orders.FindAsync(orderId);
+        if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        if (order.Status != "Open") throw new InvalidOperationException("Cannot discount a closed order.");
+
+        var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null) throw new UnauthorizedAccessException("User not found.");
+
+        // ApplyDiscount permission: Owner/StoreManager always, otherwise role permission string.
+        bool canDiscount = user.Role?.Name == "Owner" || user.Role?.Name == "StoreManager" ||
+                           (user.Role?.Permissions?.Contains(nameof(Permission.ApplyDiscount)) ?? false);
+        if (!canDiscount) throw new UnauthorizedAccessException("You do not have permission to apply a discount.");
+
+        // Resolve discount amount: percentage (of subtotal) takes precedence when provided.
+        decimal discount;
+        if (request.Percent.HasValue)
+        {
+            var pct = Math.Clamp(request.Percent.Value, 0m, 100m);
+            discount = Math.Round(order.Subtotal * pct / 100m, 2);
+        }
+        else
+        {
+            discount = Math.Round(request.Amount, 2);
+        }
+        if (discount < 0) throw new InvalidOperationException("Discount cannot be negative.");
+        if (discount > order.Subtotal) throw new InvalidOperationException("Discount cannot exceed the order subtotal.");
+
+        var before = new { order.DiscountAmount, order.TotalAmount };
+        order.DiscountAmount = discount;
+        order.TotalAmount = order.Subtotal - order.DiscountAmount + order.TaxAmount;
+        order.UpdatedAt = DateTime.UtcNow;
+        order.UpdatedBy = user.Username;
+        await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            ActorId = userId,
+            Action = "ApplyDiscount",
+            Entity = "Order",
+            EntityId = orderId,
+            Reason = request.Reason,
+            BeforeValues = JsonSerializer.Serialize(before),
+            AfterValues = JsonSerializer.Serialize(new { orderId, discount, order.TotalAmount }),
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        return await GetOrderByIdAsync(orderId, userId);
+    }
+
     public async Task<OrderDto> AddOrderItemAsync(int orderId, OrderItemRequest request, int userId)
     {
         var order = await _db.Orders.FindAsync(orderId);

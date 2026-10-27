@@ -51,6 +51,13 @@ public class OrdersController : ControllerBase
         return Ok(new ApiResponse<OrderDto> { Success = true, Data = voided });
     }
 
+    [HttpPost("{orderId}/discount")]
+    public async Task<IActionResult> ApplyDiscount(int orderId, [FromBody] ApplyDiscountRequest request)
+    {
+        var updated = await _order.ApplyDiscountAsync(orderId, request, GetUserId());
+        return Ok(new ApiResponse<OrderDto> { Success = true, Data = updated });
+    }
+
     [HttpPost("{orderId}/items")]
     public async Task<IActionResult> AddItem(int orderId, [FromBody] OrderItemRequest request)
     {

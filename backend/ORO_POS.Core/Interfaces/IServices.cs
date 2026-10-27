@@ -27,6 +27,7 @@ public interface IOrderService
     Task<PagedResult<OrderDto>> GetOrdersAsync(PagedRequest request, int? outletId, int userId);
     Task<OrderDto> UpdateOrderStatusAsync(int orderId, string status, int userId, string? reason = null);
     Task<OrderDto> VoidOrderAsync(int orderId, VoidOrderRequest request, int userId);
+    Task<OrderDto> ApplyDiscountAsync(int orderId, ApplyDiscountRequest request, int userId);
     Task<OrderDto> AddOrderItemAsync(int orderId, OrderItemRequest request, int userId);
     Task<OrderDto> RemoveOrderItemAsync(int orderId, int orderItemId, int userId);
     Task<OrderDto> ProcessPaymentAsync(int orderId, ProcessPaymentRequest request, int userId);

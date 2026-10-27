@@ -74,10 +74,12 @@
   font-size: 1.15rem; font-weight: 800; color: var(--brand-800); font-family: var(--font-display);
 }
 .order-totals .total span { color: var(--brand-800) !important; font-weight: 800; }
+.order-totals .discount span:last-child { color: var(--danger); }
 
 .payment-actions { display: flex; gap: .6rem; margin-top: 1rem; }
 .pay { flex: 1; }
 .payment-actions .btn-danger { flex: 0 0 84px; }
+.payment-actions .btn-ghost { flex: 0 0 auto; }
 
 /* ---------- Menu ---------- */
 .search { position: relative; display: flex; align-items: center; min-width: 220px; }
