@@ -250,7 +250,9 @@ public class ShiftService : IShiftService
 
         var shift = new Shift
         {
-            UserId = request.UserId,
+            // Always the authenticated caller. A client-supplied request.UserId
+            // defaults to 0 and violates FK_Shifts_Users_UserId.
+            UserId = userId,
             OutletId = request.OutletId,
             OpenTime = DateTime.UtcNow,
             OpeningFloat = request.OpeningFloat,

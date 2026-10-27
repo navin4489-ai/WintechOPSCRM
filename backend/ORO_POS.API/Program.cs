@@ -14,16 +14,78 @@ builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnC
 
 // DbContext — PostgreSQL on Render. DATABASE_URL (Render's convention) wins over
 // the appsettings default so a local dev connection string never overrides it.
-var connectionString =
+// Render hands out postgres:// URIs; Npgsql expects key=value pairs, so normalize.
+var rawConnectionString =
     Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? builder.Configuration["DATABASE_URL"]
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
         "No database connection string configured. Set DATABASE_URL or ConnectionStrings:DefaultConnection.");
 
-// Render supplies postgres://user:pass@host:port/db — Npgsql accepts this URI form directly.
+var connectionString = ToNpgsqlConnectionString(rawConnectionString);
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+// Converts postgres://user:pass@host:port/db?sslmode=require into the
+// key=value form Npgsql requires. Strings already in key=value form pass through.
+static string ToNpgsqlConnectionString(string value)
+{
+    value = value.Trim();
+    if (!value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+        !value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    {
+        return value;
+    }
+
+    var uri = new Uri(value);
+    var cs = new StringBuilder();
+    cs.Append("Host=").Append(uri.Host);
+
+    if (!uri.IsDefaultPort)
+    {
+        cs.Append(";Port=").Append(uri.Port);
+    }
+
+    var database = uri.AbsolutePath.Trim('/');
+    if (database.Length > 0)
+    {
+        cs.Append(";Database=").Append(Quote(database));
+    }
+
+    if (!string.IsNullOrEmpty(uri.UserInfo))
+    {
+        var separator = uri.UserInfo.IndexOf(':');
+        var user = separator >= 0 ? uri.UserInfo[..separator] : uri.UserInfo;
+        var password = separator >= 0 ? uri.UserInfo[(separator + 1)..] : string.Empty;
+        cs.Append(";Username=").Append(Quote(Uri.UnescapeDataString(user)));
+        cs.Append(";Password=").Append(Quote(Uri.UnescapeDataString(password)));
+    }
+
+    var query = uri.Query.TrimStart('?');
+    foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+    {
+        var kv = pair.Split('=', 2);
+        var key = Uri.UnescapeDataString(kv[0]);
+        var val = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
+
+        if (string.Equals(key, "sslmode", StringComparison.OrdinalIgnoreCase))
+        {
+            // Render's managed Postgres expects TLS; map to Npgsql's enum spelling.
+            cs.Append(";SSL Mode=").Append(val.Equals("disable", StringComparison.OrdinalIgnoreCase)
+                ? "Disable"
+                : "Require");
+        }
+        else if (!string.IsNullOrWhiteSpace(key))
+        {
+            cs.Append(';').Append(key).Append('=').Append(Quote(val));
+        }
+    }
+
+    return cs.ToString();
+}
+
+static string Quote(string value) => $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "ORO_POS_Super_Secret_Key_32Chars!";
