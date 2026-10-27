@@ -1,51 +1,132 @@
-<div class="pos">
-  <div class="header">
-    <h1>Point of Sale</h1>
-    <div class="user-info">{{user?.username}} - {{outlet?.name}}</div>
+<div class="pos fade-in">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Point of Sale</h1>
+      <p class="page-subtitle">{{ user?.username }} · {{ outlet?.name || 'Main Outlet' }}</p>
+    </div>
+    <div class="legend">
+      <span class="lg"><i class="dot free"></i> Free</span>
+      <span class="lg"><i class="dot occupied"></i> Occupied</span>
+      <span class="lg"><i class="dot selected"></i> Selected</span>
+    </div>
   </div>
 
   <div class="body">
-    <div class="panel tables-panel">
-      <h3>Tables</h3>
+    <!-- Tables -->
+    <section class="panel tables-panel">
+      <div class="panel-head"><h3 class="section-title mb-0">Tables</h3></div>
       <div class="table-grid">
-        <div class="table-tile" *ngFor="let t of tables" [class.occupied]="t.status === 'Occupied'" [class.free]="t.status === 'Free'" [class.selected]="t.status === 'Selected'" (click)="selectTable(t)">
-          <div class="table-number">{{t.tableNumber}}</div>
-          <div class="table-status">{{t.status}}</div>
-          <div class="table-capacity">{{t.capacity}} seats</div>
+        <div class="table-tile"
+             *ngFor="let t of tables"
+             [class.occupied]="t.status === 'Occupied'"
+             [class.free]="t.status === 'Free'"
+             [class.selected]="selectedTableId === t.id"
+             (click)="selectTable(t)">
+          <div class="table-number">{{ t.tableNumber }}</div>
+          <div class="table-status">{{ selectedTableId === t.id ? 'Selected' : t.status }}</div>
+          <div class="table-capacity">{{ t.capacity }} seats</div>
         </div>
+        <div *ngIf="!tables.length" class="empty-panel">No tables</div>
       </div>
-    </div>
+    </section>
 
-    <div class="panel order-panel">
-      <h3>Order: {{currentOrder?.orderNumber || 'New'}}</h3>
+    <!-- Order -->
+    <section class="panel order-panel">
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Current Order</h3>
+        <span class="order-no mono">{{ currentOrder?.orderNumber || '—' }}</span>
+      </div>
+
       <div class="order-items">
         <div class="order-item" *ngFor="let item of orderItems; let i = index">
-          <span>{{item.productName}} x{{item.quantity}}</span>
-          <span>${{item.lineTotal | number:'1.2'}}</span>
-          <button (click)="removeItem(i)">×</button>
+          <div class="oi-main">
+            <span class="oi-name">{{ item.productName }}</span>
+            <span class="oi-qty">×{{ item.quantity }}</span>
+          </div>
+          <span class="oi-total">{{ item.lineTotal | inr }}</span>
+          <button class="oi-remove" (click)="removeItem(i)" title="Remove">×</button>
         </div>
-        <div *ngIf="orderItems.length === 0" class="empty">No items</div>
+        <div *ngIf="!orderItems.length" class="empty-order">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12.5a2 2 0 0 0 2 1.5h7.5a2 2 0 0 0 2-1.6L21 7H6"/></svg>
+          <p>Select a table, then tap items to build the order</p>
+        </div>
       </div>
+
       <div class="order-totals">
-        <div>Subtotal: ${{subtotal | number:'1.2'}}</div>
-        <div>Tax: ${{tax | number:'1.2'}}</div>
-        <div class="total">Total: ${{total | number:'1.2'}}</div>
+        <div class="row"><span>Subtotal</span><span>{{ subtotal | inr }}</span></div>
+        <div class="row"><span>GST ({{ taxRate * 100 }}%)</span><span>{{ tax | inr }}</span></div>
+        <div class="row total"><span>Grand Total</span><span>{{ total | inr }}</span></div>
       </div>
+
       <div class="payment-actions">
-        <button (click)="openPaymentModal()" class="btn-primary">Process Payment</button>
-        <button (click)="voidOrder()" class="btn-danger">Void Order</button>
+        <button class="btn-success pay" (click)="openPaymentModal()" [disabled]="!orderItems.length">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+          Process Payment
+        </button>
+        <button class="btn-danger" (click)="voidOrder()" [disabled]="!currentOrder">Void</button>
+      </div>
+    </section>
+
+    <!-- Menu -->
+    <section class="panel menu-panel">
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Menu</h3>
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" [(ngModel)]="searchTerm" (ngModelChange)="applyFilter()" placeholder="Search items or SKU…" />
+        </div>
+      </div>
+      <div class="product-grid">
+        <div class="product-card" *ngFor="let p of filteredProducts" (click)="addItem(p)">
+          <div class="product-initial">{{ p.name.charAt(0) }}</div>
+          <div class="product-name">{{ p.name }}</div>
+          <div class="product-sku">{{ p.sku }}</div>
+          <div class="product-price">{{ p.price | inr }}</div>
+        </div>
+        <div *ngIf="!filteredProducts.length" class="empty-panel">No products match.</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal-backdrop" *ngIf="showPayment" (click)="closePayment()">
+  <div class="modal fade-in" (click)="$event.stopPropagation()">
+    <div class="modal-head">
+      <h3>Take Payment</h3>
+      <button class="modal-close" (click)="closePayment()">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="pay-total">
+        <span>Amount Due</span>
+        <strong>{{ total | inr }}</strong>
+      </div>
+
+      <div class="form-group">
+        <label>Tender Type</label>
+        <div class="tender-row">
+          <button *ngFor="let t of ['Cash','Card','UPI']" type="button"
+                  class="tender" [class.active]="tenderType === t" (click)="tenderType = t">{{ t }}</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Amount Received</label>
+        <input type="number" [(ngModel)]="amountReceived" min="0" step="0.01" />
+      </div>
+
+      <div class="change-row" *ngIf="tenderType === 'Cash'">
+        <span>Change Due</span>
+        <strong [class.positive]="changeDue > 0">{{ changeDue | inr }}</strong>
       </div>
     </div>
 
-    <div class="panel menu-panel">
-      <h3>Menu</h3>
-      <div class="product-grid">
-        <div class="product-card" *ngFor="let p of products" (click)="addItem(p)">
-          <div class="product-name">{{p.name}}</div>
-          <div class="product-price">${{p.price | number:'1.2'}}</div>
-          <div class="product-sku">{{p.sku}}</div>
-        </div>
-      </div>
+    <div class="modal-foot">
+      <button class="secondary" (click)="closePayment()">Cancel</button>
+      <button class="btn-success" (click)="confirmPayment()" [disabled]="processing || amountReceived < total">
+        @if (processing) { Processing… } @else { Confirm — {{ total | inr }} }
+      </button>
     </div>
   </div>
 </div>

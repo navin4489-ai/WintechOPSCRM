@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { ApiResponse } from '../../models';
+import { InrPipe } from '../../pipes/inr.pipe';
 
 @Component({
   selector: 'app-menu',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, InrPipe],
   templateUrl: './menu.component.html',
   styleUrls: ['./menu.component.css']
 })

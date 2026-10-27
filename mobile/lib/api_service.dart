@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://10.0.2.2:5000/api'; // Android emulator localhost
+  // Production (Render) — ORO POS API
+  static const String baseUrl = 'https://the-bathany.onrender.com/api';
+  // Local development options:
+  // static const String baseUrl = 'http://10.0.2.2:5000/api'; // Android emulator localhost
   // static const String baseUrl = 'http://localhost:5000/api'; // For physical device, use your PC's IP
 
   String? _token;

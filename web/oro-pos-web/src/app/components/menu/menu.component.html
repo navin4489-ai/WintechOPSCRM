@@ -1,22 +1,61 @@
-<div class="page">
-  <h1>Menu & Catalogue</h1>
+<div class="page fade-in">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Menu &amp; Catalogue</h1>
+      <p class="page-subtitle">{{ products.length }} products · {{ categories.length }} categories</p>
+    </div>
+  </div>
+
   <div class="grid">
     <div class="panel">
-      <h3>Products</h3>
-      <table>
-        <thead><tr><th>Name</th><th>SKU</th><th>Price</th><th>Available</th></tr></thead>
-        <tbody>
-          <tr *ngFor="let p of products">
-            <td>{{p.name}}</td><td>{{p.sku}}</td><td>${{p.price | number:'1.2'}}</td>
-            <td><span class="badge" [class.available]="p.isAvailable">{{p.isAvailable ? 'Yes' : 'No'}}</span></td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Products</h3>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>SKU</th>
+              <th class="num">Price</th>
+              <th>Available</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of products">
+              <td>
+                <div class="prod">
+                  <span class="prod-av">{{ p.name.charAt(0) }}</span>
+                  <strong>{{ p.name }}</strong>
+                </div>
+              </td>
+              <td class="mono">{{ p.sku }}</td>
+              <td class="num price">{{ p.price | inr }}</td>
+              <td>
+                <span class="badge" [class.available]="p.isAvailable" [class.bad]="!p.isAvailable">
+                  {{ p.isAvailable ? 'Available' : 'Unavailable' }}
+                </span>
+              </td>
+            </tr>
+            <tr *ngIf="!products.length">
+              <td colspan="4" class="empty-cell">No products yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+
     <div class="panel">
-      <h3>Categories</h3>
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Categories</h3>
+        <span class="badge neutral">{{ categories.length }}</span>
+      </div>
       <div class="category-list">
-        <div class="category-item" *ngFor="let c of categories">{{c.name}}</div>
+        <div class="category-item" *ngFor="let c of categories">
+          <span class="cat-dot"></span>
+          {{ c.name }}
+        </div>
+        <div *ngIf="!categories.length" class="empty-cell">No categories.</div>
       </div>
     </div>
   </div>

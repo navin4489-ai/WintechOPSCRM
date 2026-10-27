@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'models.dart';
+import 'currency.dart';
 import 'waiter_home.dart';
 import 'kds_home.dart';
 
@@ -19,10 +20,82 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'ORO POS',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFF17365D),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0070C0)),
         useMaterial3: true,
+        brightness: Brightness.light,
+        primaryColor: const Color(0xFF12265a),
+        scaffoldBackgroundColor: const Color(0xFFeef1f7),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2456c4),
+          primary: const Color(0xFF2456c4),
+          onPrimary: Colors.white,
+          secondary: const Color(0xFFf59e0b),
+          surface: Colors.white,
+          brightness: Brightness.light,
+        ),
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: Color(0xFF0b1b3a),
+          titleTextStyle: TextStyle(
+            color: Color(0xFF0b1b3a),
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        cardTheme: const CardThemeData(
+          color: Colors.white,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            side: BorderSide(color: Color(0xFFe5e9f2)),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2456c4),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF2456c4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            side: const BorderSide(color: Color(0xFFd3dae8)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFd3dae8)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFd3dae8)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF2456c4), width: 1.6),
+          ),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        dividerTheme: const DividerThemeData(color: Color(0xFFe5e9f2), space: 1, thickness: 1),
       ),
       home: api?.isAuthenticated ?? false ? const RoleSelector() : LoginScreen(api: api ?? ApiService()),
     );
@@ -182,7 +255,7 @@ class CustomerMenu extends StatelessWidget {
               return ListTile(
                 leading: const Icon(Icons.fastfood),
                 title: Text(p.name),
-                subtitle: Text('\$${p.price.toStringAsFixed(2)}'),
+                subtitle: Text(formatInr(p.price), style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF16a34a))),
                 trailing: ElevatedButton(
                   onPressed: () {},
                   child: const Text('Add'),

@@ -1,33 +1,76 @@
-<div class="page">
-  <h1>Table & Floor Plan Management</h1>
+<div class="page fade-in">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Tables &amp; Floor Plan</h1>
+      <p class="page-subtitle">Manage seating, zones and table status</p>
+    </div>
+    <div class="legend">
+      <span class="lg"><i class="dot free"></i> Free</span>
+      <span class="lg"><i class="dot occupied"></i> Occupied</span>
+    </div>
+  </div>
+
   <div class="grid">
+    <!-- Tables -->
     <div class="panel">
-      <h3>Tables</h3>
-      <div class="table-list">
-        <div class="table-row" *ngFor="let t of tables">
-          <span>{{t.tableNumber}}</span>
-          <span>{{t.zoneName || '-'}}</span>
-          <span>{{t.status}}</span>
-          <span>{{t.capacity}} seats</span>
-          <button (click)="changeStatus(t.id, t.status === 'Free' ? 'Occupied' : 'Free')">{{t.status === 'Free' ? 'Occupy' : 'Free'}}</button>
-        </div>
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Tables</h3>
+        <span class="badge neutral">{{ tables.length }} total</span>
       </div>
+
+      <div class="table-grid">
+        <div class="table-tile"
+             *ngFor="let t of tables"
+             [class.occupied]="t.status === 'Occupied'"
+             [class.free]="t.status === 'Free'">
+          <div class="tile-top">
+            <span class="table-number">{{ t.tableNumber }}</span>
+            <span class="badge" [class.ok]="t.status === 'Free'" [class.bad]="t.status !== 'Free'">{{ t.status }}</span>
+          </div>
+          <div class="tile-meta">
+            <span class="zone">{{ t.zoneName || 'No zone' }}</span>
+            <span class="seats">{{ t.capacity }} seats</span>
+          </div>
+          <button class="toggle" [class.occupy]="t.status === 'Free'"
+                  (click)="changeStatus(t.id, t.status === 'Free' ? 'Occupied' : 'Free')">
+            {{ t.status === 'Free' ? 'Occupy' : 'Free up' }}
+          </button>
+        </div>
+
+        <div *ngIf="!tables.length" class="empty-cell">No tables yet — add one below.</div>
+      </div>
+
       <div class="add-form">
         <h4>Add Table</h4>
-        <input [(ngModel)]="newTable.tableNumber" placeholder="Table Number" />
-        <input [(ngModel)]="newTable.capacity" type="number" placeholder="Capacity" />
-        <button (click)="createTable()">Add</button>
+        <div class="form-row">
+          <input [(ngModel)]="newTable.tableNumber" placeholder="Table number" />
+          <input [(ngModel)]="newTable.capacity" type="number" placeholder="Seats" min="1" />
+          <button class="btn-primary" (click)="createTable()">+ Add</button>
+        </div>
       </div>
     </div>
+
+    <!-- Zones -->
     <div class="panel">
-      <h3>Zones</h3>
-      <div class="zone-list">
-        <div class="zone-row" *ngFor="let z of zones">{{z.name}}</div>
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Zones</h3>
+        <span class="badge neutral">{{ zones.length }}</span>
       </div>
+
+      <div class="zone-list">
+        <div class="zone-row" *ngFor="let z of zones">
+          <span class="zone-dot"></span>
+          <span class="zone-name">{{ z.name }}</span>
+        </div>
+        <div *ngIf="!zones.length" class="empty-cell">No zones defined.</div>
+      </div>
+
       <div class="add-form">
         <h4>Add Zone</h4>
-        <input [(ngModel)]="newZone.name" placeholder="Zone Name" />
-        <button (click)="createZone()">Add</button>
+        <div class="form-row">
+          <input [(ngModel)]="newZone.name" placeholder="Zone name" />
+          <button class="btn-primary" (click)="createZone()">+ Add</button>
+        </div>
       </div>
     </div>
   </div>

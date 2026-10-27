@@ -1,65 +1,62 @@
-:host {
-  display: block;
-}
+:host { display: block; }
 
-.page {
-  max-width: 1200px;
-  margin: 0 auto;
-  font-family: system-ui, sans-serif;
-}
-
-h1 {
-  color: #17365D;
-  margin-bottom: 1rem;
-}
-
-.grid {
+.summary-grid {
   display: grid;
-  grid-template-columns: 3fr 1fr;
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
-.panel {
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.tile-label {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.tile-value {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--brand-800);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
 }
 
-h3 {
-  margin-top: 0;
-  color: #17365D;
+.tile-accent {
+  background: linear-gradient(135deg, var(--brand-800), var(--brand-600));
+  border-color: transparent;
+  box-shadow: 0 8px 22px rgba(27, 58, 130, .28);
 }
+.tile-accent .tile-label { color: #c7d4f0; }
+.tile-accent .tile-value { color: #fff; }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-}
+.panel { padding: 1.5rem; }
 
-th, td {
-  padding: 0.75rem;
+.net { font-weight: 700; color: var(--success); }
+
+tfoot th {
+  padding: .85rem;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  font-weight: 800;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--brand-800);
+  background: var(--surface-2);
+  border-top: 2px solid var(--border-strong);
 }
-
-th {
-  background: #f8f9fa;
-  font-weight: 600;
-  color: #17365D;
-}
-
-button {
-  width: 100%;
-  padding: 0.7rem;
-  background: #0070C0;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-button:hover {
-  background: #005a9e;
-}
+tfoot th.num { text-align: right; font-variant-numeric: tabular-nums; }

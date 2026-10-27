@@ -1,97 +1,37 @@
-:host {
-  display: block;
-}
+:host { display: block; }
 
-.page {
-  max-width: 1200px;
-  margin: 0 auto;
-  font-family: system-ui, sans-serif;
+.stat-pill {
+  padding: .5rem 1rem;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: #15803d;
+  font-weight: 700;
+  font-size: .85rem;
+  border: 1px solid #bbf7d0;
 }
-
-h1 {
-  color: #17365D;
-  margin-bottom: 1rem;
+.stat-pill.alert {
+  background: var(--danger-soft);
+  color: #b91c1c;
+  border-color: #fecaca;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 1.5rem;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
 }
 
-.panel {
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-}
+.panel { padding: 1.35rem; }
 
-h3 {
-  margin-top: 0;
-  color: #17365D;
-}
+.stock-num { font-weight: 700; color: var(--brand-800); font-variant-numeric: tabular-nums; }
+tr.low td { background: #fff7f7; }
+tr.low td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-}
+.form-panel { position: sticky; top: 0; }
 
-th, td {
-  padding: 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid #eee;
-}
+label { margin-bottom: .45rem; }
 
-th {
-  background: #f8f9fa;
-  font-weight: 600;
-  color: #17365D;
-}
+.full { width: 100%; margin-top: .5rem; }
 
-tr.low td { background: #fef2f2; }
-
-.badge {
-  padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.badge.low { background: #fecaca; color: #991b1b; }
-.badge:not(.low) { background: #d1fae5; color: #065f46; }
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.3rem;
-  font-size: 0.9rem;
-  color: #555;
-}
-
-select, input {
-  width: 100%;
-  padding: 0.6rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-button {
-  width: 100%;
-  padding: 0.7rem;
-  background: #16a34a;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  margin-top: 0.5rem;
-}
-
-button:hover {
-  background: #15803d;
-}
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }

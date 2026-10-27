@@ -1,20 +1,80 @@
-<div class="page">
-  <h1>Reports & Analytics</h1>
-  <div class="grid">
-    <div class="panel">
-      <h3>Sales Report</h3>
+<div class="page fade-in">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Reports &amp; Analytics</h1>
+      <p class="page-subtitle">Sales performance grouped by outlet</p>
+    </div>
+    <button class="btn-primary" (click)="exportReport()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+      Export CSV
+    </button>
+  </div>
+
+  <!-- Summary tiles -->
+  <div class="summary-grid">
+    <div class="tile">
+      <span class="tile-label">Total Orders</span>
+      <span class="tile-value">{{ totals.orders }}</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Gross Sales</span>
+      <span class="tile-value">{{ totals.gross | inr }}</span>
+    </div>
+    <div class="tile tile-accent">
+      <span class="tile-label">Net Sales</span>
+      <span class="tile-value">{{ totals.net | inr }}</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Cash</span>
+      <span class="tile-value">{{ totals.cash | inr }}</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Card</span>
+      <span class="tile-value">{{ totals.card | inr }}</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h3 class="section-title mb-0">Sales Report</h3>
+      <span class="badge neutral">{{ sales.length }} groups</span>
+    </div>
+    <div class="table-wrap">
       <table>
-        <thead><tr><th>Group</th><th>Orders</th><th>Gross</th><th>Net</th><th>Cash</th><th>Card</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Group</th>
+            <th class="num">Orders</th>
+            <th class="num">Gross</th>
+            <th class="num">Net</th>
+            <th class="num">Cash</th>
+            <th class="num">Card</th>
+          </tr>
+        </thead>
         <tbody>
           <tr *ngFor="let r of sales">
-            <td>{{r.groupKey}}</td><td>{{r.orderCount}}</td><td>${{r.grossSales | number:'1.2'}}</td><td>${{r.netSales | number:'1.2'}}</td><td>${{r.cash | number:'1.2'}}</td><td>${{r.card | number:'1.2'}}</td>
+            <td><strong>{{ r.groupKey }}</strong></td>
+            <td class="num">{{ r.orderCount }}</td>
+            <td class="num">{{ r.grossSales | inr }}</td>
+            <td class="num net">{{ r.netSales | inr }}</td>
+            <td class="num">{{ r.cash | inr }}</td>
+            <td class="num">{{ r.card | inr }}</td>
+          </tr>
+          <tr *ngIf="!sales.length">
+            <td colspan="6" class="empty-cell">No sales data yet — complete an order to see analytics here.</td>
           </tr>
         </tbody>
+        <tfoot *ngIf="sales.length">
+          <tr>
+            <th>Total</th>
+            <th class="num">{{ totals.orders }}</th>
+            <th class="num">{{ totals.gross | inr }}</th>
+            <th class="num">{{ totals.net | inr }}</th>
+            <th class="num">{{ totals.cash | inr }}</th>
+            <th class="num">{{ totals.card | inr }}</th>
+          </tr>
+        </tfoot>
       </table>
-    </div>
-    <div class="panel">
-      <h3>Export</h3>
-      <button (click)="exportReport()">Export CSV</button>
     </div>
   </div>
 </div>

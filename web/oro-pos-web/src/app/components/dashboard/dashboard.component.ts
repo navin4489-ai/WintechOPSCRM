@@ -1,26 +1,31 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
-import { CommonModule } from '@angular/common';
 import { ApiResponse } from '../../models';
+import { InrPipe } from '../../pipes/inr.pipe';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, InrPipe],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.css']
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnInit {
   summary: any;
   recentSales: any[] = [];
+  loaded = false;
 
-  constructor(private api: ApiService, private auth: AuthService) {
-    const outletId = auth.getCurrentUser()?.outletId;
-    api.getDashboard(outletId).subscribe((res: ApiResponse<any>) => {
+  constructor(private api: ApiService, private auth: AuthService) {}
+
+  ngOnInit() {
+    const outletId = this.auth.getCurrentUser()?.outletId;
+    this.api.getDashboard(outletId).subscribe((res: ApiResponse<any>) => {
       if (res.success) this.summary = res.data;
+      this.loaded = true;
     });
-    api.getSalesReport(outletId).subscribe((res: ApiResponse<any[]>) => {
+    this.api.getSalesReport(outletId).subscribe((res: ApiResponse<any[]>) => {
       if (res.success) this.recentSales = (res.data || []).slice(0, 10);
     });
   }

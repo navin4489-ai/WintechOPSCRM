@@ -1,35 +1,58 @@
-<div class="kitchen">
-  <h1>Kitchen Display System (KDS)</h1>
-  <div class="filters">
-    <button (click)="loadTickets()" class="btn-refresh">Refresh</button>
+<div class="kitchen fade-in">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Kitchen Display</h1>
+      <p class="page-subtitle">Live tickets across all stations — auto-refreshes every 5s</p>
+    </div>
+    <button class="btn-primary" (click)="loadTickets()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+      Refresh
+    </button>
   </div>
+
   <div class="ticket-grid">
     <div class="ticket-column" *ngFor="let column of ticketColumns">
-      <div class="column-header">{{column.name}}</div>
+      <div class="column-header">
+        <span class="col-name">{{ column.name }}</span>
+        <span class="col-count">{{ column.tickets.length }}</span>
+      </div>
+
       <div class="tickets">
-        <div class="ticket-card" *ngFor="let ticket of column.tickets"
+        <div class="ticket-card"
+             *ngFor="let ticket of column.tickets"
              [class.status-new]="ticket.status === 'New'"
              [class.status-accepted]="ticket.status === 'Accepted'"
              [class.status-inprogress]="ticket.status === 'InProgress'"
              [class.status-ready]="ticket.status === 'Ready'"
              [class.status-served]="ticket.status === 'Served'">
+
           <div class="ticket-header">
-            <span class="ticket-number">#{{ticket.orderNumber}}</span>
-            <span class="ticket-time">{{ticket.createdAt | date:'HH:mm'}}</span>
+            <span class="ticket-number">#{{ ticket.orderNumber }}</span>
+            <span class="ticket-time">{{ ticket.createdAt | date:'HH:mm' }}</span>
           </div>
-          <div class="ticket-table">Table: {{ticket.tableNumber || 'Counter'}}</div>
+
+          <div class="ticket-table">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="7" rx="8" ry="3.2"/><path d="M4 7v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V7"/><path d="M12 16.2V21"/></svg>
+            Table {{ ticket.tableNumber || 'Counter' }}
+          </div>
+
           <div class="ticket-items">
             <div class="ticket-item" *ngFor="let item of ticket.items">
-              {{item.productName}} ×{{item.quantity}}
+              <span class="ti-name">{{ item.productName }}</span>
+              <span class="ti-qty">×{{ item.quantity }}</span>
             </div>
           </div>
+
           <div class="ticket-actions">
-            <button *ngIf="ticket.status === 'New'" (click)="updateStatus(ticket.id, 'Accepted')">Accept</button>
-            <button *ngIf="ticket.status === 'Accepted'" (click)="updateStatus(ticket.id, 'InProgress')">Start</button>
-            <button *ngIf="ticket.status === 'InProgress'" (click)="updateStatus(ticket.id, 'Ready')">Ready</button>
-            <button *ngIf="ticket.status === 'Ready'" (click)="updateStatus(ticket.id, 'Served')">Served</button>
+            <button *ngIf="ticket.status === 'New'" class="btn-primary act" (click)="updateStatus(ticket.id, 'Accepted')">Accept</button>
+            <button *ngIf="ticket.status === 'Accepted'" class="btn-primary act" (click)="updateStatus(ticket.id, 'InProgress')">Start</button>
+            <button *ngIf="ticket.status === 'InProgress'" class="btn-primary act" (click)="updateStatus(ticket.id, 'Ready')">Ready</button>
+            <button *ngIf="ticket.status === 'Ready'" class="btn-success act" (click)="updateStatus(ticket.id, 'Served')">Served</button>
+            <span *ngIf="ticket.status === 'Served'" class="served-tag">✓ Completed</span>
           </div>
         </div>
+
+        <div *ngIf="!column.tickets.length" class="empty-tickets">No tickets</div>
       </div>
     </div>
   </div>

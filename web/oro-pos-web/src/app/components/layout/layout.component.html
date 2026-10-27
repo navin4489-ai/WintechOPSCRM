@@ -1,23 +1,76 @@
-<div class="layout">
+<div class="shell">
+  <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="brand">ORO POS</div>
-    <nav>
-      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">Dashboard</a>
-      <a routerLink="/pos" routerLinkActive="active">POS / Orders</a>
-      <a routerLink="/kitchen" routerLinkActive="active">Kitchen (KDS)</a>
-      <a routerLink="/tables" routerLinkActive="active">Tables / Floor Plan</a>
-      <a routerLink="/inventory" routerLinkActive="active">Inventory</a>
-      <a routerLink="/menu" routerLinkActive="active">Menu / Catalogue</a>
-      <a routerLink="/reports" routerLinkActive="active">Reports</a>
-      <a routerLink="/staff" routerLinkActive="active">Staff</a>
+    <div class="brand">
+      <div class="brand-mark">O</div>
+      <div class="brand-text">
+        <span class="brand-name">ORO POS</span>
+        <span class="brand-tag">Restaurant Suite</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">Menu</div>
+      <a *ngFor="let item of nav"
+         [routerLink]="item.path"
+         routerLinkActive="active"
+         [routerLinkActiveOptions]="{ exact: !!item.exact }"
+         class="nav-link">
+        <span class="nav-icon">
+          @switch (item.icon) {
+            @case ('dash') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+            }
+            @case ('pos') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M7 8h10M7 12h4"/><circle cx="16" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg>
+            }
+            @case ('kitchen') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4v-2a1 1 0 0 1 1-1Z"/><path d="M8 11V6a2 2 0 0 1 4 0M12 11V7a2 2 0 0 1 4 0v4"/></svg>
+            }
+            @case ('tables') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="7" rx="8" ry="3.2"/><path d="M4 7v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V7"/><path d="M12 16.2V21M8 21h8"/></svg>
+            }
+            @case ('inventory') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7Z"/><path d="M3 8.5 12 13l9-4.5M12 13v7"/></svg>
+            }
+            @case ('menu') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 17a3 3 0 0 1 3-3h11"/><path d="M9 8h6M9 11h4"/></svg>
+            }
+            @case ('reports') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+            }
+            @case ('staff') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6M17.5 19a5.5 5.5 0 0 0-2.2-4.4"/></svg>
+            }
+          }
+        </span>
+        <span class="nav-text">{{ item.label }}</span>
+      </a>
     </nav>
-    <div class="user-info">
-      <div>{{user?.username}}</div>
-      <div class="role">{{user?.roleName}}</div>
-      <button (click)="logout()">Sign Out</button>
+
+    <div class="user-card">
+      <div class="avatar">{{ initials }}</div>
+      <div class="user-meta">
+        <span class="user-name">{{ user?.username }}</span>
+        <span class="user-role">{{ user?.roleName }}</span>
+      </div>
+      <button class="signout" (click)="logout()" title="Sign out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>
+      </button>
     </div>
   </aside>
-  <main class="content">
-    <router-outlet></router-outlet>
-  </main>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb">ORO POS · {{ user?.outletName || 'Main Outlet' }}</div>
+      <div class="topbar-right">
+        <span class="clock">{{ now | date:'EEEE, d MMM y' }}</span>
+        <span class="env-pill">● Live</span>
+      </div>
+    </header>
+    <main class="content">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
 </div>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Table;
 import 'api_service.dart';
 import 'models.dart';
+import 'currency.dart';
 
 class WaiterHome extends StatefulWidget {
   const WaiterHome({super.key});
@@ -96,7 +97,7 @@ class _WaiterHomeState extends State<WaiterHome> {
             TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount')),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: 'Cash',
+              initialValue: 'Cash',
               items: ['Cash', 'Card', 'Digital Wallet'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
               onChanged: (_) {},
               decoration: const InputDecoration(labelText: 'Tender Type'),
@@ -214,7 +215,7 @@ class _WaiterHomeState extends State<WaiterHome> {
                             return ListTile(
                               leading: CircleAvatar(child: Text('${item.quantity}')),
                               title: Text(item.productName),
-                              subtitle: Text('\$${item.lineTotal.toStringAsFixed(2)}'),
+                              subtitle: Text(formatInr(item.lineTotal), style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF16a34a))),
                             );
                           },
                         ),
@@ -232,14 +233,14 @@ class _WaiterHomeState extends State<WaiterHome> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text('Subtotal:', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text('\$${currentOrder!.subtotal.toStringAsFixed(2)}'),
+                            Text(formatInr(currentOrder!.subtotal)),
                           ],
                         ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text('Total:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            Text('\$${currentOrder!.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, color: Color(0xFF17365D), fontWeight: FontWeight.bold)),
+                            Text(formatInr(currentOrder!.totalAmount), style: const TextStyle(fontSize: 18, color: Color(0xFF17365D), fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ],
@@ -264,7 +265,7 @@ class _WaiterHomeState extends State<WaiterHome> {
                       return Card(
                         child: ListTile(
                           title: Text(p.name),
-                          subtitle: Text('\$${p.price.toStringAsFixed(2)}  |  ${p.sku}'),
+                          subtitle: Text('${formatInr(p.price)}  |  ${p.sku}'),
                           trailing: ElevatedButton(
                             onPressed: () => _addItem(p),
                             child: const Text('Add'),

@@ -1,19 +1,68 @@
 <div class="login-page">
-  <div class="login-card">
-    <div class="brand">ORO POS</div>
-    <h2>Sign In</h2>
-    <form [formGroup]="form" (ngSubmit)="onSubmit()">
-      <div class="form-group">
-        <label>Username</label>
-        <input type="text" formControlName="username" placeholder="admin" />
+  <!-- Left: brand / marketing panel -->
+  <aside class="hero">
+    <div class="hero-inner">
+      <div class="hero-brand">
+        <div class="hero-mark">O</div>
+        <span>ORO POS</span>
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" formControlName="password" placeholder="••••••••" />
+      <h1 class="hero-title">Run your restaurant<br>like clockwork.</h1>
+      <p class="hero-sub">Point of sale, kitchen display, inventory, floor plans and analytics — one seamless platform built for modern hospitality.</p>
+      <ul class="hero-features">
+        <li><span class="tick">✓</span> Blazing-fast table-side ordering</li>
+        <li><span class="tick">✓</span> Live kitchen display (KDS)</li>
+        <li><span class="tick">✓</span> GST-ready ₹ billing &amp; reports</li>
+        <li><span class="tick">✓</span> Roles, outlets &amp; staff management</li>
+      </ul>
+    </div>
+    <div class="hero-glow"></div>
+  </aside>
+
+  <!-- Right: sign-in card -->
+  <main class="form-side">
+    <div class="login-card fade-in">
+      <div class="mobile-brand">
+        <div class="hero-mark">O</div>
+        <span>ORO POS</span>
       </div>
-      <button type="submit" [disabled]="loading">Sign In</button>
-      <div class="error" *ngIf="error">{{error}}</div>
-    </form>
-    <div class="hint">Default: admin / Admin&#64;123</div>
-  </div>
+      <h2>Welcome back</h2>
+      <p class="lead">Sign in to your workspace</p>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <div class="form-group">
+          <label>Username</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+            <input type="text" formControlName="username" placeholder="admin" autocomplete="username" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <input [type]="hidePassword ? 'password' : 'text'" formControlName="password" placeholder="••••••••" autocomplete="current-password" />
+            <button type="button" class="eye" (click)="hidePassword = !hidePassword" tabindex="-1">
+              @if (hidePassword) {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              } @else {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2"/><path d="M9.4 5.2A9.7 9.7 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.4 4.3M6.2 6.2A17 17 0 0 0 2 12s3.5 7 10 7a9.6 9.6 0 0 0 3.6-.7"/></svg>
+              }
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary submit" [disabled]="loading">
+          @if (loading) { <span class="spinner"></span> Signing in… }
+          @else { Sign In }
+        </button>
+
+        <div class="error-banner" *ngIf="error">{{ error }}</div>
+      </form>
+
+      <div class="hint">
+        <span class="dot"></span>
+        Demo: <strong>admin</strong> / <strong>Admin&#64;123</strong>
+      </div>
+    </div>
+  </main>
 </div>

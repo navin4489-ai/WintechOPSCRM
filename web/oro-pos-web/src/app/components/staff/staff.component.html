@@ -1,48 +1,65 @@
-<div class="page">
-  <div class="header">
-    <h1>Staff Management</h1>
-    <button class="primary" (click)="newStaff()">+ Add Staff</button>
+<div class="page fade-in">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Staff Management</h1>
+      <p class="page-subtitle">{{ users.length }} team member{{ users.length === 1 ? '' : 's' }} · roles &amp; outlet access</p>
+    </div>
+    <button class="btn-primary" (click)="newStaff()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
+      Add Staff
+    </button>
   </div>
 
   <div class="panel">
-    <table>
-      <thead>
-        <tr>
-          <th>Username</th>
-          <th>Email</th>
-          <th>Role</th>
-          <th>Outlet</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let u of users" [class.inactive]="!u.isActive">
-          <td>{{u.username}}</td>
-          <td>{{u.email}}</td>
-          <td><span class="badge role">{{u.roleName || '—'}}</span></td>
-          <td>{{u.outletName || 'All outlets'}}</td>
-          <td>
-            <span class="badge" [class.ok]="u.isActive" [class.bad]="!u.isActive">
-              {{u.isActive ? 'Active' : 'Inactive'}}
-            </span>
-          </td>
-          <td class="actions">
-            <button class="link" (click)="edit(u)">Edit</button>
-            <button class="link danger" (click)="remove(u)">Remove</button>
-          </td>
-        </tr>
-        <tr *ngIf="!users.length">
-          <td colspan="6" class="empty">No staff accounts yet.</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Outlet</th>
+            <th>Status</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let u of users" [class.inactive]="!u.isActive">
+            <td>
+              <div class="person">
+                <span class="person-av">{{ (u.username || '?').charAt(0) | uppercase }}</span>
+                <strong>{{ u.username }}</strong>
+              </div>
+            </td>
+            <td class="text-muted">{{ u.email }}</td>
+            <td><span class="badge role">{{ u.roleName || '—' }}</span></td>
+            <td>{{ u.outletName || 'All outlets' }}</td>
+            <td>
+              <span class="badge" [class.ok]="u.isActive" [class.bad]="!u.isActive">
+                {{ u.isActive ? 'Active' : 'Inactive' }}
+              </span>
+            </td>
+            <td class="actions">
+              <button class="link" (click)="edit(u)">Edit</button>
+              <button class="link danger" (click)="remove(u)">Remove</button>
+            </td>
+          </tr>
+          <tr *ngIf="!users.length">
+            <td colspan="6" class="empty-cell">No staff accounts yet — add your first team member.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <div class="panel" *ngIf="editing">
-    <h3>{{ form.id ? 'Edit Staff Account' : 'New Staff Account' }}</h3>
+  <!-- Editor -->
+  <div class="panel editor fade-in" *ngIf="editing">
+    <div class="panel-head">
+      <h3 class="section-title mb-0">{{ form.id ? 'Edit Staff Account' : 'New Staff Account' }}</h3>
+      <button class="modal-close" (click)="cancel()">×</button>
+    </div>
 
-    <div class="error" *ngIf="error">{{error}}</div>
+    <div class="error-banner" *ngIf="error">{{ error }}</div>
 
     <div class="form-grid">
       <div class="form-group">
@@ -62,23 +79,25 @@
         <label>Role</label>
         <select [(ngModel)]="form.roleId">
           <option [ngValue]="undefined">— none —</option>
-          <option *ngFor="let r of roles" [ngValue]="r.id">{{r.name}}</option>
+          <option *ngFor="let r of roles" [ngValue]="r.id">{{ r.name }}</option>
         </select>
       </div>
       <div class="form-group">
         <label>Outlet Scope</label>
         <select [(ngModel)]="form.outletId">
           <option [ngValue]="undefined">— none (all outlets) —</option>
-          <option *ngFor="let o of outlets" [ngValue]="o.id">{{o.name}}</option>
+          <option *ngFor="let o of outlets" [ngValue]="o.id">{{ o.name }}</option>
         </select>
       </div>
       <div class="form-group checkbox" *ngIf="form.id">
-        <label><input type="checkbox" [(ngModel)]="form.isActive" /> Active (can sign in)</label>
+        <label class="check-label"><input type="checkbox" [(ngModel)]="form.isActive" /> Active (can sign in)</label>
       </div>
     </div>
 
     <div class="form-actions">
-      <button class="primary" (click)="save()" [disabled]="saving">{{saving ? 'Saving…' : 'Save'}}</button>
+      <button class="btn-primary" (click)="save()" [disabled]="saving">
+        {{ saving ? 'Saving…' : 'Save Changes' }}
+      </button>
       <button class="secondary" (click)="cancel()">Cancel</button>
     </div>
   </div>

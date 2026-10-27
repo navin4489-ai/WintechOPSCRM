@@ -1,34 +1,82 @@
-<div class="page">
-  <h1>Inventory Management</h1>
-  <div class="grid">
-    <div class="panel">
-      <h3>Stock Levels</h3>
-      <table>
-        <thead><tr><th>Product</th><th>SKU</th><th>Stock</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr *ngFor="let p of stock" [class.low]="p.isLowStock">
-            <td>{{p.productName}}</td><td>{{p.sku}}</td><td>{{p.currentStock | number:'1.2'}}</td>
-            <td><span class="badge" [class.low]="p.isLowStock">{{p.isLowStock ? 'LOW' : 'OK'}}</span></td>
-          </tr>
-        </tbody>
-      </table>
+<div class="page fade-in">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Inventory</h1>
+      <p class="page-subtitle">Stock levels and movement tracking</p>
     </div>
+    <div class="stat-pill" [class.alert]="lowCount > 0">
+      {{ lowCount }} low-stock item{{ lowCount === 1 ? '' : 's' }}
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Stock levels -->
     <div class="panel">
-      <h3>Record Movement</h3>
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Stock Levels</h3>
+        <span class="badge neutral">{{ stock.length }} products</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>SKU</th>
+              <th class="num">Stock</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of stock" [class.low]="p.isLowStock">
+              <td><strong>{{ p.productName }}</strong></td>
+              <td class="mono">{{ p.sku }}</td>
+              <td class="num stock-num">{{ p.currentStock | number:'1.0-2' }}</td>
+              <td>
+                <span class="badge" [class.low]="p.isLowStock" [class.ok]="!p.isLowStock">
+                  {{ p.isLowStock ? 'Low' : 'OK' }}
+                </span>
+              </td>
+            </tr>
+            <tr *ngIf="!stock.length">
+              <td colspan="4" class="empty-cell">No stock records yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Record movement -->
+    <div class="panel form-panel">
+      <div class="panel-head">
+        <h3 class="section-title mb-0">Record Movement</h3>
+      </div>
+
+      <div class="form-group">
+        <label>Product</label>
+        <select [(ngModel)]="movement.productId">
+          <option [ngValue]="0" disabled>Select a product…</option>
+          <option *ngFor="let p of stock" [ngValue]="p.productId">{{ p.productName }} ({{ p.sku }})</option>
+        </select>
+      </div>
+
       <div class="form-group">
         <label>Movement Type</label>
         <select [(ngModel)]="movement.movementType">
-          <option value="Receipt">Receipt</option>
-          <option value="Sale">Sale</option>
-          <option value="Waste">Waste</option>
-          <option value="Adjustment">Adjustment</option>
+          <option value="Receipt">Receipt (stock in)</option>
+          <option value="Sale">Sale (stock out)</option>
+          <option value="Waste">Waste (spoilage)</option>
+          <option value="Adjustment">Adjustment (correction)</option>
         </select>
       </div>
+
       <div class="form-group">
         <label>Quantity</label>
-        <input type="number" [(ngModel)]="movement.quantity" />
+        <input type="number" [(ngModel)]="movement.quantity" min="0" step="1" placeholder="e.g. 10" />
       </div>
-      <button (click)="recordMovement()">Record</button>
+
+      <button class="btn-primary full" (click)="recordMovement()" [disabled]="!movement.productId || !movement.quantity">
+        Record Movement
+      </button>
     </div>
   </div>
 </div>
