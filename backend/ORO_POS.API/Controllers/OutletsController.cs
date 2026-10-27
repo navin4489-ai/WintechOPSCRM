@@ -29,17 +29,15 @@ public class OutletsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] OutletDto dto)
     {
-        var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
-        if (!can) return Forbid();
-        var created = await _outlet.CreateOutletAsync(dto, GetUserId());
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, new ApiResponse<OutletDto> { Success = true, Data = created });
+        await Task.CompletedTask;
+        return BadRequest(new ApiResponse<object> { Success = false, Errors = new[] { "Use Super Admin outlet onboarding, including the outlet-admin username, email and password." } });
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] OutletDto dto)
     {
         var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
-        if (!can) return Forbid();
+        if (!can && !User.IsInRole("StoreManager")) return Forbid();
         var updated = await _outlet.UpdateOutletAsync(id, dto, GetUserId());
         return Ok(new ApiResponse<OutletDto> { Success = true, Data = updated });
     }

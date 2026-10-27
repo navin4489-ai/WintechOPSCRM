@@ -27,6 +27,11 @@ export class ApiService {
   removeProductImage(id: number): Observable<ApiResponse<unknown>> { return this.http.delete<ApiResponse<unknown>>(`${this.base}/products/${id}/image`); }
   saveProduct(id: number, request: CreateProductRequest): Observable<ApiResponse<ProductDto>> { return id ? this.http.put<ApiResponse<ProductDto>>(`${this.base}/products/${id}`, request) : this.createProduct(request); }
   superAdminOutlets(): Observable<ApiResponse<OutletDto[]>> { return this.http.get<ApiResponse<OutletDto[]>>(`${this.base}/super-admin/outlets`); }
+  onboardOutlet(outlet:OutletDto,adminUsername:string,adminPassword:string,adminEmail?:string):Observable<ApiResponse<{outlet:OutletDto;administrator:UserDto}>> {return this.http.post<ApiResponse<{outlet:OutletDto;administrator:UserDto}>>(`${this.base}/super-admin/outlets`,{outlet,adminUsername,adminPassword,adminEmail:adminEmail?.trim()||null});}
+  ownOutlet():Observable<ApiResponse<OutletDto>> {return this.http.get<ApiResponse<OutletDto>>(`${this.base}/outlet-settings`);}
+  updateOwnOutlet(dto:OutletDto):Observable<ApiResponse<OutletDto>> {return this.http.put<ApiResponse<OutletDto>>(`${this.base}/outlet-settings`,dto);}
+  ownOrdering():Observable<ApiResponse<any>> {return this.http.get<ApiResponse<any>>(`${this.base}/outlet-settings/ordering`);}
+  configureOwnOrdering(enabled:boolean,rotateKey=false):Observable<ApiResponse<any>> {return this.http.post<ApiResponse<any>>(`${this.base}/outlet-settings/ordering`,{enabled,rotateKey});}
   saveOutlet(dto: OutletDto): Observable<ApiResponse<OutletDto>> { return dto.id ? this.http.put<ApiResponse<OutletDto>>(`${this.base}/super-admin/outlets/${dto.id}`, dto) : this.http.post<ApiResponse<OutletDto>>(`${this.base}/super-admin/outlets`, dto); }
   orderingSettings(id: number): Observable<ApiResponse<any>> { return this.http.get<ApiResponse<any>>(`${this.base}/super-admin/outlets/${id}/ordering`); }
   configureOrdering(id: number, enabled: boolean, rotateKey = false): Observable<ApiResponse<any>> { return this.http.post<ApiResponse<any>>(`${this.base}/super-admin/outlets/${id}/ordering`, {enabled, rotateKey}); }

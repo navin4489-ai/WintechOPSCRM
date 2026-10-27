@@ -75,7 +75,7 @@ public class AuthService : IAuthService
     {
         var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
         if (user == null || user.Role == null) return false;
-        return GetPermissions(user.Role).Contains(permission.ToString());
+        return user.Role.Name == "Owner" || GetPermissions(user.Role).Contains(permission.ToString());
     }
 
     public async Task<bool> ValidateOutletAccessAsync(int userId, int outletId)

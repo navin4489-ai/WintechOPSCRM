@@ -39,7 +39,8 @@ public class UserService : IUserService
         // Non-owner managers see only their own outlet's staff.
         if (actor.Role?.Name != "Owner")
         {
-            query = query.Where(u => u.OutletId == actor.OutletId);
+            if (!actor.OutletId.HasValue) throw new UnauthorizedAccessException("Outlet assignment required.");
+            query = query.Where(u => u.OutletId == actor.OutletId && u.Role != null && u.Role.Name != "Owner");
         }
 
         var users = await query.OrderBy(u => u.Username).ToListAsync();
@@ -55,6 +56,7 @@ public class UserService : IUserService
             .Include(u => u.Outlet)
             .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
 
+        if (user != null) await EnsureScopeAsync(actorId, user);
         return user == null ? null : Map(user);
     }
 
@@ -81,6 +83,7 @@ public class UserService : IUserService
             throw new InvalidOperationException($"Email '{email}' is already registered.");
 
         var (role, outlet) = await ResolveRoleAndOutletAsync(request.RoleId, request.OutletId);
+        await EnsureScopeAsync(actorId, null, role, outlet, true);
 
         var user = new User
         {
@@ -140,6 +143,11 @@ public class UserService : IUserService
             throw new InvalidOperationException($"Email '{email}' is already registered.");
 
         var (role, outlet) = await ResolveRoleAndOutletAsync(request.RoleId, request.OutletId);
+        await EnsureScopeAsync(actorId, user, role, outlet, true);
+        if (user.Id == actorId && !request.IsActive) throw new InvalidOperationException("You cannot deactivate your own account.");
+        var actor = await TenantAccess.ActorAsync(_db, actorId);
+        if (actor.Role!.Name != "Owner" && user.Id == actorId && (role?.Id != user.RoleId || outlet?.Id != user.OutletId))
+            throw new InvalidOperationException("An outlet administrator cannot change their own role or outlet assignment.");
 
         // Guard: never let the last active Owner lock everyone out.
         var wasOwner = user.Role?.Name == "Owner";
@@ -205,6 +213,7 @@ public class UserService : IUserService
 
         if (user.Id == actorId)
             throw new InvalidOperationException("You cannot delete your own account.");
+        await EnsureScopeAsync(actorId, user);
 
         if (user.Role?.Name == "Owner" && await IsLastActiveOwnerAsync(user.Id))
             throw new InvalidOperationException("Cannot delete the last active Owner account.");
@@ -258,6 +267,20 @@ public class UserService : IUserService
     {
         var can = await _auth.ValidatePermissionAsync(actorId, Permission.ManageUsers);
         if (!can) throw new UnauthorizedAccessException("ManageUsers permission required.");
+    }
+
+    private async Task EnsureScopeAsync(int actorId, User? target, Role? requestedRole = null, Outlet? requestedOutlet = null, bool assigning = false)
+    {
+        var actor = await TenantAccess.ActorAsync(_db, actorId);
+        if (actor.Role!.Name == "Owner") return;
+        if (!actor.OutletId.HasValue || (target != null && (target.OutletId != actor.OutletId || target.Role?.Name == "Owner")))
+            throw new UnauthorizedAccessException("You can manage only staff in your own outlet.");
+        if (assigning || target == null)
+        {
+            var own = ParsePermissions(actor.Role.Permissions);
+            if (requestedOutlet?.Id != actor.OutletId || requestedRole == null || requestedRole.Name == "Owner" || ParsePermissions(requestedRole.Permissions).Except(own).Any())
+                throw new UnauthorizedAccessException("Cannot assign another outlet or grant higher-level permissions.");
+        }
     }
 
     private async Task<(Role? role, Outlet? outlet)> ResolveRoleAndOutletAsync(int? roleId, int? outletId)

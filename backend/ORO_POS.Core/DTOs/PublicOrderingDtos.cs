@@ -21,6 +21,9 @@ public class PublicMenuDto
 }
 public class GuestOrderConfirmation
 {
+    public string OutletName { get; set; } = "";
+    public string? OutletPhone { get; set; }
+    public string PreparationStatus { get; set; } = "New";
     public string OrderNumber { get; set; } = "";
     public string Status { get; set; } = "";
     public decimal Subtotal { get; set; }

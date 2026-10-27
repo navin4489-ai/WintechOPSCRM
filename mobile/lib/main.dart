@@ -311,6 +311,8 @@ class _OperationsHomeState extends State<OperationsHome> {
     ('Catalogue', Icons.restaurant_menu),
     if (widget.api.user?.roleName == 'Owner')
       ('Super Admin', Icons.admin_panel_settings_outlined),
+    if (widget.api.user?.roleName == 'StoreManager')
+      ('My Outlet', Icons.storefront_outlined),
     if (widget.api.can('ManageInventory'))
       ('Inventory', Icons.inventory_2_outlined),
     if (widget.api.can('ViewReports')) ...[

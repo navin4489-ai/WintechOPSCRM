@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -8,12 +8,23 @@ import { ProductDto } from '../../models';
 
 interface CartLine { productId:number; name:string; unitPrice:number; quantity:number; notes:string; modifierOptionIds:number[]; }
 @Component({selector:'app-public-order',standalone:true,imports:[CommonModule,FormsModule,InrPipe],templateUrl:'./public-order.component.html',styleUrls:['./public-order.component.css']})
-export class PublicOrderComponent implements OnInit {
+export class PublicOrderComponent implements OnInit,OnDestroy {
   key=''; menu:any=null; loading=true; busy=false; error='';
   cart:CartLine[]=[]; customerName=''; customerPhone=''; notes=''; requestId=''; confirmation:any=null;
   search=''; category='All'; selected:ProductDto|null=null; quantity=1; itemNotes=''; modifiers:Record<number,boolean>={};
+  private poll?:ReturnType<typeof setInterval>;
+  lastUpdated:Date|null=null;statusNote='';
   constructor(private api:ApiService,private route:ActivatedRoute){}
-  ngOnInit(){this.key=this.route.snapshot.paramMap.get('key')||'';try{const saved=JSON.parse(sessionStorage.getItem('oro_guest_'+this.key)||'null');if(saved){this.cart=saved.cart||[];this.customerName=saved.customerName||'';this.customerPhone=saved.customerPhone||'';this.notes=saved.notes||'';this.requestId=saved.requestId||'';this.confirmation=saved.confirmation;}}catch{}this.load();}
+  ngOnInit(){
+    this.key=this.route.snapshot.paramMap.get('key')||'';
+    try{const saved=JSON.parse(sessionStorage.getItem('oro_guest_'+this.key)||'null');if(saved){this.cart=saved.cart||[];this.customerName=saved.customerName||'';this.customerPhone=saved.customerPhone||'';this.notes=saved.notes||'';this.requestId=saved.requestId||'';this.confirmation=saved.confirmation;}}catch{}
+    try{const encoded=new URLSearchParams(this.route.snapshot.fragment||'').get('track');if(encoded){const t=JSON.parse(atob(encoded));if(typeof t.number==='string'&&t.number.length<100&&/^[a-f0-9]{64}$/i.test(t.proof))this.confirmation={orderNumber:t.number,trackingProof:t.proof};}}catch{}
+    this.load();if(this.confirmation)this.refreshStatus();
+    this.poll=setInterval(()=>{if(!document.hidden&&!this.busy&&this.confirmation&&!['Voided','Refunded'].includes(this.confirmation.status)&&!(this.confirmation.status==='Closed'&&this.confirmation.preparationStatus==='Served'))this.refreshStatus(true);},15000);
+  }
+  ngOnDestroy(){if(this.poll)clearInterval(this.poll);}
+  get trackingUrl(){if(!this.confirmation?.trackingProof)return '';const url=new URL(location.origin+'/order/'+this.key);const p=new URLSearchParams();p.set('track',btoa(JSON.stringify({number:this.confirmation.orderNumber,proof:this.confirmation.trackingProof})));url.hash=p.toString();return url.toString();}
+  copyTracking(){navigator.clipboard.writeText(this.trackingUrl).then(()=>this.statusNote='Tracking link copied. Save or bookmark it; anyone with this private link can see this order.',()=>this.statusNote='Clipboard unavailable. Bookmark this page using your browser.');}
   load(){this.loading=true;this.error='';this.api.publicMenu(this.key).subscribe({next:r=>{this.menu=r.data;this.loading=false;},error:e=>{this.loading=false;this.error=this.message(e);}});}
   get categories():string[]{return ['All',...new Set<string>((this.menu?.products||[]).map((p:ProductDto)=>p.categoryName||'Other'))];}
   get products():ProductDto[]{return (this.menu?.products||[]).filter((p:ProductDto)=>(this.category==='All'||(p.categoryName||'Other')===this.category)&&p.name.toLowerCase().includes(this.search.toLowerCase()));}
@@ -24,9 +35,17 @@ export class PublicOrderComponent implements OnInit {
   remove(index:number){this.cart.splice(index,1);this.changed();}
   changed(){this.requestId='';this.persist();}
   persist(){sessionStorage.setItem('oro_guest_'+this.key,JSON.stringify({cart:this.cart,customerName:this.customerName,customerPhone:this.confirmation?'':this.customerPhone,notes:this.notes,requestId:this.requestId,confirmation:this.confirmation}));}
-  submit(){if(this.busy||!this.cart.length||!this.customerName.trim()||!this.customerPhone.trim())return;const digits=this.customerPhone.replace(/[^0-9]/g,'');if(digits.length<7||digits.length>15){this.error='Enter a valid contact number with 7–15 digits.';return;}this.busy=true;this.error='';if(!this.requestId)this.requestId=crypto.randomUUID();this.persist();this.api.placeGuestOrder(this.key,{requestId:this.requestId,customerName:this.customerName.trim(),customerPhone:this.customerPhone.trim(),notes:this.notes,items:this.cart.map(i=>({productId:i.productId,quantity:i.quantity,notes:i.notes,modifierOptionIds:i.modifierOptionIds}))}).subscribe({next:r=>{this.busy=false;this.confirmation=r.data;this.cart=[];this.customerPhone='';this.persist();},error:e=>{this.busy=false;this.error=this.message(e)+' If the connection was interrupted, retry the same cart; your request key prevents duplicate orders.';}});}
-  refreshStatus(){if(this.busy||!this.confirmation)return;this.busy=true;this.api.trackGuestOrder(this.key,this.confirmation.orderNumber,this.confirmation.trackingProof).subscribe({next:r=>{this.busy=false;this.confirmation=r.data;this.persist();},error:e=>{this.busy=false;this.error=this.message(e);}});}
-  another(){this.confirmation=null;this.requestId='';this.cart=[];this.notes='';this.persist();this.load();}
+  submit(){
+    if(this.busy||!this.cart.length||!this.customerName.trim()||!this.customerPhone.trim())return;
+    const digits=this.customerPhone.replace(/[^0-9]/g,'');if(digits.length<7||digits.length>15){this.error='Enter a valid contact number with 7–15 digits.';return;}
+    this.busy=true;this.error='';if(!this.requestId)this.requestId=crypto.randomUUID();this.persist();
+    this.api.placeGuestOrder(this.key,{requestId:this.requestId,customerName:this.customerName.trim(),customerPhone:this.customerPhone.trim(),notes:this.notes,items:this.cart.map(i=>({productId:i.productId,quantity:i.quantity,notes:i.notes,modifierOptionIds:i.modifierOptionIds}))}).subscribe({
+      next:r=>{this.busy=false;this.confirmation=r.data;this.cart=[];this.customerPhone='';this.lastUpdated=new Date();this.persist();history.replaceState(null,'',this.trackingUrl);},
+      error:e=>{this.busy=false;this.error=this.message(e)+' If the connection was interrupted, retry the same cart; your request key prevents duplicate orders.';}
+    });
+  }
+  refreshStatus(silent=false){if(this.busy||!this.confirmation)return;this.busy=true;this.api.trackGuestOrder(this.key,this.confirmation.orderNumber,this.confirmation.trackingProof).subscribe({next:r=>{this.busy=false;this.confirmation=r.data;this.lastUpdated=new Date();this.statusNote='';if(!this.menu)this.menu={outletName:r.data?.outletName,phone:r.data?.outletPhone,products:[],acceptingOrders:false,paymentInstruction:'Cash payments are handled at the outlet.'};this.persist();history.replaceState(null,'',this.trackingUrl);},error:e=>{this.busy=false;if(silent)this.statusNote='Status refresh is temporarily unavailable. We will retry automatically.';else this.error=this.message(e);}});}
+  another(){this.confirmation=null;this.requestId='';this.cart=[];this.notes='';this.statusNote='';history.replaceState(null,'',location.pathname);this.persist();this.load();}
   viewCart(){document.querySelector('.cart')?.scrollIntoView({behavior:'smooth',block:'start'});}
   message(e:any){return e?.status===429?'Too many requests. Please wait a minute and try again.':e?.error?.errors?.[0]||'Unable to reach the outlet. Please refresh or contact the outlet.';}
 }

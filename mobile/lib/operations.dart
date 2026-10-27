@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -62,7 +63,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
       error = null;
     });
     try {
-      final outlet = api.outletId;
+      final outlet = module == 'Super Admin' ? null : api.outletId;
       final result = await api.request(switch (module) {
         'Overview' =>
           api.can('ViewReports')
@@ -79,6 +80,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
         'Audit log' => '/reports/audit?outletId=$outlet&page=$page&pageSize=20',
         'Staff' => '/users',
         'Super Admin' => '/super-admin/outlets',
+        'My Outlet' => '/outlet-settings',
         _ => throw const ApiException('Unknown module'),
       });
       dynamic open;
@@ -89,7 +91,9 @@ class _OperationsScreenState extends State<OperationsScreen> {
         setState(() {
           data = result;
           shift = open;
-          rows = result is List
+          rows = module == 'My Outlet' && result is Map
+              ? [result]
+              : result is List
               ? result
               : result is Map && result['items'] is List
               ? result['items']
@@ -404,6 +408,12 @@ class _OperationsScreenState extends State<OperationsScreen> {
   }
 
   Future<void> outletForm([dynamic outlet]) async {
+    if (outlet == null && api.user?.roleName != 'Owner') return;
+    final random = Random.secure();
+    const alphabet =
+        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#';
+    final generated =
+        'OrO2!${List.generate(16, (_) => alphabet[random.nextInt(alphabet.length)]).join()}';
     final value = await askForm(
       context,
       outlet == null ? 'Create outlet' : 'Outlet configuration',
@@ -432,31 +442,121 @@ class _OperationsScreenState extends State<OperationsScreen> {
           initial: outlet?['isOperating'] == false ? 'no' : 'yes',
           choices: const {'yes': 'Operating', 'no': 'Closed'},
         ),
+        if (outlet == null) ...[
+          FormFieldSpec(
+            'adminUsername',
+            'Outlet admin user ID',
+            initial: 'outlet_admin_${random.nextInt(99999999)}',
+          ),
+          const FormFieldSpec(
+            'adminEmail',
+            'Admin email (optional, unique)',
+            optional: true,
+          ),
+          FormFieldSpec(
+            'adminPassword',
+            'Initial admin password (12+ characters)',
+            secret: true,
+            initial: generated,
+          ),
+        ],
       ],
     );
     if (value == null) return;
     await run(() async {
-      await api.request(
+      final details = {
+        'name': value['name'],
+        'address': value['address'],
+        'phone': value['phone'],
+        'timezone': value['timezone'],
+        'id': outlet?['id'] ?? 0,
+        'currency': 'INR',
+        'isOperating': value['operating'] == 'yes',
+        'taxSetup': outlet?['taxSetup'],
+      };
+      final result = await api.request(
         outlet == null
             ? '/super-admin/outlets'
-            : '/super-admin/outlets/${outlet['id']}',
+            : api.user?.roleName == 'Owner'
+            ? '/super-admin/outlets/${outlet['id']}'
+            : '/outlet-settings',
         method: outlet == null ? 'POST' : 'PUT',
-        body: {
-          ...value,
-          'id': outlet?['id'] ?? 0,
-          'currency': 'INR',
-          'isOperating': value.remove('operating') == 'yes',
-          'taxSetup': outlet?['taxSetup'],
-        },
+        body: outlet == null
+            ? {
+                'outlet': details,
+                'adminUsername': value['adminUsername'],
+                'adminPassword': value['adminPassword'],
+                'adminEmail': value['adminEmail'] == ''
+                    ? null
+                    : value['adminEmail'],
+              }
+            : details,
       );
+      if (outlet == null && mounted) {
+        bool show = false;
+        final login = '${Uri.parse(ApiService.baseUrl).origin}/login';
+        final username = result['administrator']['username'];
+        final password = value['adminPassword'];
+        await showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, update) => AlertDialog(
+              title: const Text('Outlet admin login created'),
+              content: SizedBox(
+                width: 430,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${result['outlet']['name']}',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 12),
+                      SelectableText('Sign in: $login\nUser ID: $username'),
+                      const SizedBox(height: 12),
+                      const Text('Initial password'),
+                      SelectableText(show ? '$password' : '••••••••••••••••'),
+                      TextButton(
+                        onPressed: () => update(() => show = !show),
+                        child: Text(show ? 'Hide password' : 'Show password'),
+                      ),
+                      const Text(
+                        'Share securely. This account can run only its assigned outlet. Passwords cannot be retrieved later; ask the admin to change it after signing in.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Clipboard.setData(
+                    ClipboardData(
+                      text:
+                          'ORO POS — ${result['outlet']['name']}\nSign in: $login\nUser ID: $username\nInitial password: $password\nAccess: assigned outlet only. Please change password after signing in.',
+                    ),
+                  ),
+                  child: const Text('Copy login details'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     });
   }
 
   Future<void> outletQr(dynamic outlet) async {
     await run(() async {
-      var config = Map<String, dynamic>.from(
-        await api.request('/super-admin/outlets/${outlet['id']}/ordering'),
-      );
+      final orderingPath = api.user?.roleName == 'Owner'
+          ? '/super-admin/outlets/${outlet['id']}/ordering'
+          : '/outlet-settings/ordering';
+      var config = Map<String, dynamic>.from(await api.request(orderingPath));
       if (!mounted) return;
       bool updating = false;
       await showDialog(
@@ -532,7 +632,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
                         update(() => updating = true);
                         try {
                           final result = await api.request(
-                            '/super-admin/outlets/${outlet['id']}/ordering',
+                            orderingPath,
                             method: 'POST',
                             body: {
                               'enabled': config['enabled'] != true,
@@ -594,7 +694,16 @@ class _OperationsScreenState extends State<OperationsScreen> {
 
   Future<void> staffForm([dynamic staff]) async {
     await run(() async {
-      final roles = await api.request('/roles') as List;
+      final roles = ((await api.request('/roles')) as List)
+          .where(
+            (r) =>
+                api.user?.roleName == 'Owner' ||
+                (r['name'] != 'Owner' &&
+                    ((r['permissions'] as List?) ?? []).every(
+                      (p) => api.user?.permissions.contains(p) == true,
+                    )),
+          )
+          .toList();
       final outlets = await api.request('/outlets') as List;
       if (!mounted) return;
       final value = await askForm(
@@ -1013,7 +1122,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
           ],
         ),
       ),
-      'Super Admin' => ListTile(
+      'Super Admin' || 'My Outlet' => ListTile(
         leading: const Icon(Icons.storefront_outlined),
         title: Text('${r['name']}'),
         subtitle: Text(
@@ -1030,13 +1139,14 @@ class _OperationsScreenState extends State<OperationsScreen> {
               widget.onNavigate('Overview');
             }
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Configure outlet')),
-            PopupMenuItem(value: 'qr', child: Text('Public ordering QR')),
-            PopupMenuItem(
-              value: 'use',
-              child: Text('Use this outlet workspace'),
-            ),
+          itemBuilder: (_) => [
+            const PopupMenuItem(value: 'edit', child: Text('Configure outlet')),
+            const PopupMenuItem(value: 'qr', child: Text('Public ordering QR')),
+            if (api.user?.roleName == 'Owner')
+              const PopupMenuItem(
+                value: 'use',
+                child: Text('Use this outlet workspace'),
+              ),
           ],
         ),
       ),
@@ -1178,7 +1288,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
 
   List<Widget> get tools => switch (module) {
     'Tables' =>
-      api.can('ManageSettings')
+      api.can('ManageSettings') || api.user?.roleName == 'StoreManager'
           ? [
               FilledButton.icon(
                 onPressed: busy ? null : addTable,

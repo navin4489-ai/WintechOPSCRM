@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 import { UserDto, RoleDto, OutletDto, CreateUserRequest, UpdateUserRequest, ApiResponse } from '../../models';
 
 interface StaffForm {
@@ -31,14 +32,14 @@ export class StaffComponent implements OnInit {
   error = '';
   form: StaffForm = this.blank();
 
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService, public auth:AuthService) {}
 
   ngOnInit() {
     this.load();
   }
 
   load() {
-    this.api.getRoles().subscribe((r: ApiResponse<RoleDto[]>) => { if (r.success) this.roles = r.data || []; });
+    this.api.getRoles().subscribe((r: ApiResponse<RoleDto[]>) => { if (r.success) {const u=this.auth.getCurrentUser();this.roles=(r.data||[]).filter(role=>u?.roleName==='Owner'||(role.name!=='Owner'&&role.permissions.every(p=>u?.permissions.includes(p))));} });
     this.api.getOutlets().subscribe((r: ApiResponse<OutletDto[]>) => { if (r.success) this.outlets = r.data || []; });
     this.api.getUsers().subscribe((r: ApiResponse<UserDto[]>) => { if (r.success) this.users = r.data || []; });
   }
@@ -49,6 +50,7 @@ export class StaffComponent implements OnInit {
 
   newStaff() {
     this.form = this.blank();
+    this.form.outletId=this.auth.getCurrentUser()?.outletId;
     this.error = '';
     this.editing = true;
   }
@@ -100,8 +102,8 @@ export class StaffComponent implements OnInit {
         error: (e) => { this.saving = false; this.error = e?.error?.errors?.join('; ') || 'Save failed.'; }
       });
     } else {
-      if (!this.form.password || this.form.password.length < 6) {
-        this.error = 'Password must be at least 6 characters.';
+      if (!this.form.password || this.form.password.length < 12) {
+        this.error = 'Password must be at least 12 characters.';
         this.saving = false;
         return;
       }

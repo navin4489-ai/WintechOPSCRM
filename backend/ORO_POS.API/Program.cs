@@ -134,6 +134,8 @@ builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<PermissionSeedService>();
 builder.Services.AddScoped<PublicOrderingService>();
 builder.Services.AddScoped<ProductImageService>();
+builder.Services.AddScoped<OutletProvisioningService>();
+builder.Services.AddScoped<ORO_POS.API.Security.OutletOrderingSettingsService>();
 
 // CORS - allow Angular dev and production
 builder.Services.AddCors(options =>

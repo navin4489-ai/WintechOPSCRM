@@ -42,6 +42,7 @@ public class KitchenService : IKitchenService
             .Include(kt => kt.Order).ThenInclude(o => o.OrderItems).ThenInclude(oi => oi.Product)
             .Include(kt => kt.Order).ThenInclude(o => o.Table)
             .FirstOrDefaultAsync(kt => kt.Id == ticketId && !kt.IsDeleted);
+        if (ticket != null) await TenantAccess.RequireAsync(_db, userId, ticket.Order.OutletId);
         return ticket == null ? null : MapToDto(ticket);
     }
 
@@ -49,6 +50,8 @@ public class KitchenService : IKitchenService
     {
         var ticket = await _db.KitchenTickets.FindAsync(request.TicketId);
         if (ticket == null || ticket.IsDeleted) throw new KeyNotFoundException("Ticket not found.");
+        var ticketOutlet = await _db.Orders.Where(o=>o.Id==ticket.OrderId).Select(o=>o.OutletId).FirstAsync();
+        await TenantAccess.RequireAsync(_db, userId, ticketOutlet);
         var next = ticket.Status switch { "New" => "Accepted", "Accepted" => "InProgress", "InProgress" => "Ready", "Ready" => "Served", _ => "" };
         if (request.Status != next) throw new InvalidOperationException("Invalid kitchen status transition. Refresh the ticket.");
 
@@ -110,6 +113,7 @@ public class InventoryService : IInventoryService
 
     public async Task<List<ProductStockDto>> GetStockLevelsAsync(int? outletId, int userId)
     {
+        outletId = await TenantAccess.ScopeAsync(_db, userId, outletId);
         var query = _db.Products.Include(p => p.InventoryLedgers).Where(p => !p.IsDeleted);
         if (outletId.HasValue) query = query.Where(p => p.OutletId == outletId.Value);
 
@@ -126,6 +130,7 @@ public class InventoryService : IInventoryService
 
     public async Task<List<InventoryLedgerDto>> GetInventoryMovementsAsync(int? outletId, PagedRequest request, int userId)
     {
+        outletId = await TenantAccess.ScopeAsync(_db, userId, outletId);
         var query = _db.InventoryLedgers.Include(i => i.Product).Include(i => i.Actor).Where(i => !i.IsDeleted);
         if (outletId.HasValue) query = query.Where(i => i.Product != null && i.Product.OutletId == outletId.Value);
 
@@ -154,6 +159,7 @@ public class InventoryService : IInventoryService
     {
         var product = request.ProductId.HasValue ? await _db.Products.Include(p => p.InventoryLedgers).FirstOrDefaultAsync(p => p.Id == request.ProductId.Value) : null;
         if (product == null) throw new InvalidOperationException("Select a valid product.");
+        await TenantAccess.RequireAsync(_db, actorId, product.OutletId);
         if (!new[] { "Receipt", "Sale", "Waste", "Adjustment", "PhysicalCount" }.Contains(request.MovementType))
             throw new InvalidOperationException("Invalid inventory movement type.");
         if ((request.Quantity == 0 && request.MovementType != "PhysicalCount") || (request.MovementType != "Adjustment" && request.Quantity < 0))
@@ -202,6 +208,8 @@ public class InventoryService : IInventoryService
         var product = await _db.Products.FindAsync(request.ProductId);
         var ingredient = await _db.Products.FindAsync(request.IngredientId);
         if (product == null || ingredient == null) throw new KeyNotFoundException("Product or ingredient not found.");
+        await TenantAccess.RequireAsync(_db, userId, product.OutletId);
+        await TenantAccess.RequireAsync(_db, userId, ingredient.OutletId);
         if (request.ProductId == request.IngredientId || request.Quantity <= 0 || product.OutletId != ingredient.OutletId)
             throw new InvalidOperationException("A recipe needs a different ingredient in the same outlet and a positive quantity.");
         if (await _db.Recipes.AnyAsync(r => r.ProductId == request.ProductId && r.IngredientId == request.IngredientId))
@@ -223,7 +231,10 @@ public class InventoryService : IInventoryService
 
     public async Task<List<RecipeDto>> GetRecipesAsync(int? productId, int userId)
     {
+        var scope = await TenantAccess.ScopeAsync(_db, userId, null);
+        if (productId.HasValue) { var product = await _db.Products.FindAsync(productId.Value) ?? throw new KeyNotFoundException("Product not found."); await TenantAccess.RequireAsync(_db, userId, product.OutletId); }
         var query = _db.Recipes.Include(r => r.Product).Include(r => r.Ingredient).Where(r => !r.IsDeleted);
+        if (scope.HasValue) query = query.Where(r=>r.Product.OutletId==scope.Value && r.Ingredient.OutletId==scope.Value);
         if (productId.HasValue) query = query.Where(r => r.ProductId == productId.Value);
 
         var recipes = await query.ToListAsync();
@@ -262,6 +273,7 @@ public class ShiftService : IShiftService
 
     public async Task<ShiftDto> OpenShiftAsync(OpenShiftRequest request, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, request.OutletId);
         if (request.OpeningFloat < 0) throw new InvalidOperationException("Opening float cannot be negative.");
         var existing = await _db.Shifts.FirstOrDefaultAsync(s => s.UserId == userId && s.Status == ShiftStatus.Open.ToString());
         if (existing != null) throw new InvalidOperationException("User already has an open shift.");
@@ -287,6 +299,7 @@ public class ShiftService : IShiftService
     {
         var shift = await _db.Shifts.FindAsync(request.ShiftId);
         if (shift == null || shift.Status != ShiftStatus.Open.ToString()) throw new KeyNotFoundException("Open shift not found.");
+        await TenantAccess.RequireAsync(_db, userId, shift.OutletId);
         if (request.CountedCash < 0) throw new InvalidOperationException("Counted cash cannot be negative.");
 
         shift.CloseTime = DateTime.UtcNow;
@@ -308,12 +321,14 @@ public class ShiftService : IShiftService
 
     public async Task<ShiftDto?> GetOpenShiftAsync(int userId, int outletId)
     {
+        await TenantAccess.RequireAsync(_db, userId, outletId);
         var shift = await _db.Shifts.FirstOrDefaultAsync(s => s.UserId == userId && s.OutletId == outletId && s.Status == ShiftStatus.Open.ToString());
         return shift == null ? null : MapToDto(shift);
     }
 
     public async Task<List<ShiftDto>> GetShiftsAsync(int? outletId, PagedRequest request, int userId)
     {
+        outletId = await TenantAccess.ScopeAsync(_db, userId, outletId);
         var query = _db.Shifts.Include(s => s.User).Include(s => s.Outlet).Where(s => !s.IsDeleted);
         if (outletId.HasValue) query = query.Where(s => s.OutletId == outletId.Value);
 
@@ -343,6 +358,7 @@ public class ShiftService : IShiftService
     {
         var shift = await _db.Shifts.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == shiftId);
         if (shift == null) throw new KeyNotFoundException("Shift not found.");
+        await TenantAccess.RequireAsync(_db, userId, shift.OutletId);
 
         var orders = await _db.Orders.Include(o => o.Payments).Where(o => o.ShiftId == shiftId && o.Status == "Closed").ToListAsync();
 
@@ -403,6 +419,7 @@ public class ReportService : IReportService
 
     public async Task<List<SalesReportDto>> GetSalesReportAsync(SalesReportRequest request, int userId)
     {
+        request.OutletId = await TenantAccess.ScopeAsync(_db, userId, request.OutletId);
         var query = _db.Orders.Include(o => o.Payments).Include(o => o.User).Where(o => o.Status == "Closed" && !o.IsDeleted);
 
         if (request.OutletId.HasValue) query = query.Where(o => o.OutletId == request.OutletId.Value);
@@ -436,6 +453,7 @@ public class ReportService : IReportService
 
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(int? outletId, int userId)
     {
+        outletId = await TenantAccess.ScopeAsync(_db, userId, outletId);
         var today = DateTime.UtcNow.Date;
         var query = _db.Orders.Where(o => !o.IsDeleted);
         if (outletId.HasValue) query = query.Where(o => o.OutletId == outletId.Value);
@@ -463,6 +481,7 @@ public class ReportService : IReportService
 
     public async Task<List<AuditLogDto>> GetAuditLogsAsync(int? outletId, PagedRequest request, int userId)
     {
+        outletId = await TenantAccess.ScopeAsync(_db, userId, outletId);
         var query = _db.AuditLogs.Include(a => a.Actor).Where(a => !a.IsDeleted);
         if (outletId.HasValue) query = query.Where(a =>
             a.Entity == "Order" ? _db.Orders.Any(o => o.Id == a.EntityId && o.OutletId == outletId.Value) :

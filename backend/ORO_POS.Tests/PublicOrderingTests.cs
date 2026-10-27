@@ -86,5 +86,11 @@ public class PublicOrderingTests : IDisposable
         var png=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=");
         Assert.StartsWith("/api/products/1/image",await new ProductImageService(db).SaveAsync(1,png,2));
     }
+    [Fact] public async Task ExistingCustomerCanTrackWhenNewOrderingIsDisabled()
+    {
+        var result=await guest.PlaceAsync(Key,Request());(await db.DeviceConfigs.SingleAsync()).IsActive=false;await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<KeyNotFoundException>(()=>guest.GetMenuAsync(Key));
+        Assert.Equal(result.OrderNumber,(await guest.TrackAsync(Key,result.OrderNumber,result.TrackingProof)).OrderNumber);
+    }
     public void Dispose()=>db.Dispose();
 }

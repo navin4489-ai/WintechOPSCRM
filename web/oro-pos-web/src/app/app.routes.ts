@@ -8,7 +8,6 @@ import { TablesComponent } from './components/tables/tables.component';
 import { ReportsComponent } from './components/reports/reports.component';
 import { ShiftsComponent } from './components/shifts/shifts.component';
 import { InventoryComponent } from './components/inventory/inventory.component';
-import { MenuComponent } from './components/menu/menu.component';
 import { StaffComponent } from './components/staff/staff.component';
 import { AuthGuard } from './guards/auth.guard';
 import { OperationsComponent } from './components/operations/operations.component';
@@ -27,13 +26,14 @@ export const routes: Routes = [
       { path: 'kitchen', component: KitchenComponent },
       { path: 'tables', component: TablesComponent },
       { path: 'inventory', component: InventoryComponent },
-      { path: 'menu', component: MenuComponent },
+      { path: 'menu', loadComponent:()=>import('./components/menu/menu.component').then(m=>m.MenuComponent) },
       { path: 'reports', component: ReportsComponent },
       { path: 'shifts', component: ShiftsComponent },
       { path: 'staff', component: StaffComponent },
       { path: 'orders', component: OperationsComponent },
       { path: 'audit', component: OperationsComponent, data: { audit: true } },
       { path: 'super-admin', loadComponent: () => import('./components/super-admin/super-admin.component').then(m => m.SuperAdminComponent) },
+      { path: 'outlet-settings', loadComponent: () => import('./components/super-admin/super-admin.component').then(m => m.SuperAdminComponent), data: { ownOutlet: true } },
     ]
   },
   { path: '**', redirectTo: 'dashboard' }

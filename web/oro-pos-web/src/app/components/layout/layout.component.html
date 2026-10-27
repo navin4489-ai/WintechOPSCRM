@@ -1,6 +1,7 @@
-<div class="shell">
+<div class="shell" (keydown.escape)="menuOpen = false">
+  @if(menuOpen){<button class="menu-shade" aria-label="Close navigation" (click)="menuOpen=false"></button>}
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="app-navigation" [class.open]="menuOpen">
     <div class="brand">
       <img class="brand-mark" src="oro-logo.svg" alt="ORO POS"/>
       <div class="brand-text">
@@ -15,7 +16,7 @@
          [routerLink]="item.path"
          routerLinkActive="active"
          [routerLinkActiveOptions]="{ exact: !!item.exact }"
-         class="nav-link">
+          class="nav-link" [title]="item.label" (click)="menuOpen=false">
         <span class="nav-icon">
           @switch (item.icon) {
             @case ('dash') {
@@ -55,7 +56,7 @@
       <div class="avatar">{{ initials }}</div>
       <div class="user-meta">
         <span class="user-name">{{ user?.username }}</span>
-        <span class="user-role">{{ user?.roleName }}</span>
+        <span class="user-role">{{ user?.roleName==='Owner'?'Super Admin':user?.roleName==='StoreManager'?'Outlet Admin':user?.roleName }}</span>
       </div>
       <button class="signout" (click)="logout()" title="Sign out">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>
@@ -66,9 +67,10 @@
   <!-- Main -->
   <div class="main">
     <header class="topbar">
-      <div class="crumb">ORO POS · {{ user?.outletName || 'Main Outlet' }}</div>
+      <button class="menu-toggle" aria-label="Open navigation" aria-controls="app-navigation" [attr.aria-expanded]="menuOpen" (click)="menuOpen=!menuOpen">☰</button>
+      <div class="crumb" [title]="user?.outletName">ORO POS · {{ user?.outletName || 'Outlet' }}</div>
       <div class="topbar-right">
-        <button type="button" (click)="passwordDialog = true">Change password</button>
+        <button type="button" aria-label="Change password" (click)="passwordDialog = true"><span class="full-label">Change password</span><span class="short-label">Password</span></button>
         <span class="clock">{{ now | date:'EEEE, d MMM y' }}</span>
         <span class="env-pill">● Live</span>
       </div>

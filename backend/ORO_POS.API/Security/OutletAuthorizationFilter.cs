@@ -45,7 +45,8 @@ public sealed class OutletAuthorizationFilter(AppDbContext db) : IAsyncActionFil
         };
         var permissions = JsonSerializer.Deserialize<string[]>(user.Role.Permissions ?? "[]") ?? [];
         var outletCatalogueAdmin = user.Role.Name == "StoreManager" && new[] {"Products","Categories","ModifierGroups"}.Contains(controller);
-        if (!owner && !outletCatalogueAdmin && permission != null && !permissions.Contains(permission))
+        var outletLocalAdmin = user.Role.Name == "StoreManager" && (new[]{"Tables","Zones"}.Contains(controller)||(controller=="Outlets"&&action=="Update"));
+        if (!owner && !outletCatalogueAdmin && !outletLocalAdmin && permission != null && !permissions.Contains(permission))
         { context.Result = new ForbidResult(); return; }
         if (controller == "Orders" && action == "Receipt" && !owner && !permissions.Contains("EditOrder") && !permissions.Contains("ViewReports"))
         { context.Result = new ForbidResult(); return; }
@@ -100,8 +101,7 @@ public sealed class OutletAuthorizationFilter(AppDbContext db) : IAsyncActionFil
         }
         // Recipes without a product filter and global role/outlet administration
         // expose multi-outlet configuration and are restricted to the owner.
-        if ((controller == "Recipes" && !write && (!context.ActionArguments.TryGetValue("productId", out var productFilter) || productFilter == null))
-            || (controller == "Outlets" && write))
+        if (controller == "Outlets" && write && action != "Update")
         { context.Result = new ForbidResult(); return; }
         await next();
     }

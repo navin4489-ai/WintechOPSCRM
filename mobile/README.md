@@ -1,4 +1,4 @@
-# ORO POS Android 1.2.0
+# ORO POS Android 1.3.0
 
 Native Flutter workspace with the gold/navy ORO mark. Uses the same API and INR
 accounting as the web app, not an embedded web page.
@@ -20,6 +20,11 @@ accounting as the web app, not an embedded web page.
 - Catalogue/category/table creation, staff create/edit/deactivation, audit history.
 - Owner/Super Admin outlet configuration, working-outlet selection, public QR ordering
   enable/disable, link copy and QR poster printing.
+- Super Admin outlet creation provisions a separate outlet-admin username/password
+  atomically. Login details can be revealed/copied once for secure handoff; the
+  server stores only a password hash. Email is optional for this onboarding flow.
+- Outlet administrators (`StoreManager`) have a **My Outlet** screen and cannot
+  switch to another outlet workspace or create additional outlets.
 - Item image upload/replacement from the Android gallery. Images are stored in
   PostgreSQL and displayed on POS, catalogue and the public QR menu.
 - Filtered sales reports and Android print/PDF report output.

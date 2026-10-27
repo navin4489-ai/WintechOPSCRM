@@ -86,6 +86,7 @@ public interface IMenuService
     Task<List<CategoryDto>> GetCategoriesAsync(int outletId, int userId);
     Task<CategoryDto> CreateCategoryAsync(CreateCategoryRequest request, int userId);
     Task<List<ProductDto>> GetProductsAsync(int outletId, int? categoryId, bool availableOnly, int userId);
+    Task<List<ProductDto>> GetPublicProductsAsync(int outletId);
     Task<ProductDto> CreateProductAsync(CreateProductRequest request, int userId);
     Task<ProductDto> UpdateProductAsync(int productId, CreateProductRequest request, int userId);
     Task<List<ModifierGroupDto>> GetModifierGroupsAsync(int outletId, int userId);

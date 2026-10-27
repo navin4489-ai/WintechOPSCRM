@@ -105,7 +105,72 @@ class FakeApi extends ApiService {
   }
 }
 
+class FakeOutletAdmin extends FakeApi {
+  @override
+  User? get user => User(
+    id: 2,
+    username: 'outlet_admin',
+    roleName: 'StoreManager',
+    permissions: [
+      'CreateOrder',
+      'EditOrder',
+      'ViewReports',
+      'ManageInventory',
+      'ManageUsers',
+    ],
+    outletId: 7,
+    outletName: 'Only my outlet',
+  );
+  @override
+  Future<dynamic> request(
+    String path, {
+    String method = 'GET',
+    Object? body,
+  }) async {
+    if (path == '/outlet-settings') {
+      calls.add('$method $path');
+      bodies.add(body);
+      return {
+        'id': 7,
+        'name': 'Only my outlet',
+        'currency': 'INR',
+        'timezone': 'Asia/Kolkata',
+        'isOperating': true,
+      };
+    }
+    return super.request(path, method: method, body: body);
+  }
+}
+
 void main() {
+  test('Outlet admin cannot switch to another outlet workspace', () async {
+    final api = FakeOutletAdmin()..signedIn = true;
+    await expectLater(
+      api.selectOutlet(99, 'Another outlet'),
+      throwsA(isA<ApiException>()),
+    );
+    expect(api.outletId, 7);
+    expect(api.canManageCatalogue, isTrue);
+    expect(api.can('ManageSettings'), isFalse);
+  });
+  testWidgets('Outlet admin sees own settings but not Super Admin navigation', (
+    tester,
+  ) async {
+    tester.view.physicalSize=const Size(390,844);tester.view.devicePixelRatio=1;
+    addTearDown(tester.view.resetPhysicalSize);addTearDown(tester.view.resetDevicePixelRatio);
+    final api = FakeOutletAdmin()..signedIn = true;
+    await tester.pumpWidget(MyApp(api: api));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    expect(find.text('Super Admin'), findsNothing);
+    await tester.scrollUntilVisible(find.text('My Outlet'),150,scrollable:find.descendant(of:find.byType(Drawer),matching:find.byType(Scrollable)).first);
+    await tester.tap(find.text('My Outlet'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('GET /outlet-settings'));
+    expect(api.calls.any((c) => c.contains('/super-admin/')), isFalse);
+    expect(tester.takeException(), isNull);
+  });
   test('INR formatter groups lakhs and crores', () {
     expect(formatInr(123456.78), '₹1,23,456.78');
     expect(formatInr(12345678.9), '₹1,23,45,678.90');

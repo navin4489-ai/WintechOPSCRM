@@ -14,8 +14,8 @@ public class OutletService : IOutletService
 
     public async Task<List<OutletDto>> GetOutletsAsync(int userId)
     {
-        var actor = await _db.Users.Include(u=>u.Role).FirstOrDefaultAsync(u=>u.Id==userId&&u.IsActive) ?? throw new UnauthorizedAccessException("User not found.");
-        var outlets = await _db.Outlets.Where(o => !o.IsDeleted && (actor.Role!.Name=="Owner" || o.Id==actor.OutletId)).ToListAsync();
+        var scope = await TenantAccess.ScopeAsync(_db, userId, null);
+        var outlets = await _db.Outlets.Where(o => !o.IsDeleted && (!scope.HasValue || o.Id==scope.Value)).ToListAsync();
         return outlets.Select(o => new OutletDto
         {
             Id = o.Id, Name = o.Name, Address = o.Address, Phone = o.Phone,
@@ -25,6 +25,7 @@ public class OutletService : IOutletService
 
     public async Task<OutletDto?> GetOutletByIdAsync(int id, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, id);
         var o = await _db.Outlets.FirstOrDefaultAsync(o => o.Id == id && !o.IsDeleted);
         return o == null ? null : new OutletDto
         {
@@ -35,6 +36,7 @@ public class OutletService : IOutletService
 
     public async Task<OutletDto> CreateOutletAsync(OutletDto dto, int userId)
     {
+        await TenantAccess.RequireOwnerAsync(_db, userId);
         ValidateOutlet(dto);
         if (await _db.Outlets.AnyAsync(o => o.Name == dto.Name)) throw new InvalidOperationException("Outlet name already exists.");
         var outlet = new Outlet
@@ -53,6 +55,7 @@ public class OutletService : IOutletService
 
     public async Task<OutletDto> UpdateOutletAsync(int id, OutletDto dto, int userId)
     {
+        await TenantAccess.RequireOutletAdminAsync(_db, userId, id);
         ValidateOutlet(dto);
         var outlet = await _db.Outlets.FindAsync(id);
         if (outlet == null) throw new KeyNotFoundException("Outlet not found.");
@@ -88,6 +91,7 @@ public class MenuService : IMenuService
 
     public async Task<List<CategoryDto>> GetCategoriesAsync(int outletId, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, outletId);
         return await _db.Categories.Where(c => c.OutletId == outletId && !c.IsDeleted)
             .OrderBy(c => c.SortOrder)
             .Select(c => new CategoryDto { Id = c.Id, OutletId = c.OutletId, Name = c.Name, SortOrder = c.SortOrder })
@@ -96,8 +100,11 @@ public class MenuService : IMenuService
 
     public async Task<CategoryDto> CreateCategoryAsync(CreateCategoryRequest request, int userId)
     {
-        if (string.IsNullOrWhiteSpace(request.Name)) throw new InvalidOperationException("Category name is required.");
-        if (await _db.Categories.AnyAsync(c => c.OutletId == request.OutletId && c.Name == request.Name.Trim()))
+        await TenantAccess.RequireAsync(_db, userId, request.OutletId);
+        request.Name=request.Name.Trim();
+        if (request.Name.Length==0||request.Name.Length>80) throw new InvalidOperationException("Category name must contain 1–80 characters.");
+        var normalized=request.Name.ToLowerInvariant();
+        if (await _db.Categories.AnyAsync(c => c.OutletId == request.OutletId && c.Name.ToLower() == normalized))
             throw new InvalidOperationException("Category name already exists in this outlet.");
         var cat = new Category { OutletId = request.OutletId, Name = request.Name, SortOrder = request.SortOrder };
         _db.Categories.Add(cat);
@@ -106,6 +113,12 @@ public class MenuService : IMenuService
     }
 
     public async Task<List<ProductDto>> GetProductsAsync(int outletId, int? categoryId, bool availableOnly, int userId)
+    {
+        await TenantAccess.RequireAsync(_db, userId, outletId);
+        return await QueryProductsAsync(outletId, categoryId, availableOnly);
+    }
+    public Task<List<ProductDto>> GetPublicProductsAsync(int outletId) => QueryProductsAsync(outletId, null, true);
+    private async Task<List<ProductDto>> QueryProductsAsync(int outletId, int? categoryId, bool availableOnly)
     {
         var query = _db.Products.Include(p => p.Category).Include(p => p.ModifierGroups).ThenInclude(pmg => pmg.ModifierGroup).ThenInclude(mg => mg.Options)
             .Where(p => p.OutletId == outletId && !p.IsDeleted);
@@ -118,6 +131,7 @@ public class MenuService : IMenuService
 
     public async Task<ProductDto> CreateProductAsync(CreateProductRequest request, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, request.OutletId);
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.SKU) || request.Price < 0)
             throw new InvalidOperationException("Name, SKU and a non-negative price are required.");
         if (await _db.Products.AnyAsync(p => p.OutletId == request.OutletId && p.SKU == request.SKU))
@@ -148,6 +162,7 @@ public class MenuService : IMenuService
     public async Task<ProductDto> UpdateProductAsync(int productId, CreateProductRequest request, int userId)
     {
         var product = await _db.Products.FindAsync(productId) ?? throw new KeyNotFoundException("Product not found.");
+        await TenantAccess.RequireAsync(_db, userId, product.OutletId);
         if (request.OutletId != product.OutletId || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.SKU) || request.Price < 0)
             throw new InvalidOperationException("Keep the assigned outlet and enter a name, SKU and non-negative price.");
         if (await _db.Products.AnyAsync(p => p.OutletId == product.OutletId && p.Id != productId && p.SKU == request.SKU)) throw new InvalidOperationException("SKU already exists.");
@@ -163,6 +178,7 @@ public class MenuService : IMenuService
 
     public async Task<List<ModifierGroupDto>> GetModifierGroupsAsync(int outletId, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, outletId);
         return await _db.ModifierGroups.Include(mg => mg.Options).Where(mg => mg.OutletId == outletId && !mg.IsDeleted)
             .Select(mg => new ModifierGroupDto
             {
@@ -174,6 +190,7 @@ public class MenuService : IMenuService
 
     public async Task<ModifierGroupDto> CreateModifierGroupAsync(CreateModifierGroupRequest request, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, request.OutletId);
         var mg = new ModifierGroup
         {
             OutletId = request.OutletId, Name = request.Name, IsRequired = request.IsRequired,
@@ -228,8 +245,9 @@ public class TableService : ITableService
 
     public async Task<List<TableDto>> GetTablesAsync(int outletId, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, outletId);
         var tables = await _db.Tables.Include(t => t.Zone).Where(t => t.OutletId == outletId && !t.IsDeleted).ToListAsync();
-        var openOrderIds = await _db.Orders.Where(o => o.Status != "Closed" && o.Status != "Voided").Select(o => o.TableId).ToListAsync();
+        var openOrderIds = await _db.Orders.Where(o => o.OutletId == outletId && o.Status == "Open").Select(o => o.TableId).ToListAsync();
 
         return tables.Select(t => new TableDto
         {
@@ -242,6 +260,8 @@ public class TableService : ITableService
 
     public async Task<TableDto> CreateTableAsync(CreateTableRequest request, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, request.OutletId);
+        if (request.ZoneId.HasValue && !await _db.Zones.AnyAsync(z => z.Id == request.ZoneId.Value && z.OutletId == request.OutletId)) throw new InvalidOperationException("Zone must belong to this outlet.");
         if (string.IsNullOrWhiteSpace(request.TableNumber) || request.Capacity < 1 || request.Capacity > 100)
             throw new InvalidOperationException("A table number and capacity between 1 and 100 are required.");
         if (await _db.Tables.AnyAsync(t => t.OutletId == request.OutletId && t.TableNumber == request.TableNumber))
@@ -260,6 +280,7 @@ public class TableService : ITableService
     {
         var table = await _db.Tables.FindAsync(tableId);
         if (table == null) throw new KeyNotFoundException("Table not found.");
+        await TenantAccess.RequireAsync(_db, userId, table.OutletId);
         table.Status = status; table.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return new TableDto { Id = table.Id, TableNumber = table.TableNumber, Status = table.Status };
@@ -267,6 +288,7 @@ public class TableService : ITableService
 
     public async Task<List<ZoneDto>> GetZonesAsync(int outletId, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, outletId);
         return await _db.Zones.Where(z => z.OutletId == outletId && !z.IsDeleted)
             .Select(z => new ZoneDto { Id = z.Id, OutletId = z.OutletId, Name = z.Name, FloorPlanData = z.FloorPlanData })
             .ToListAsync();
@@ -274,6 +296,7 @@ public class TableService : ITableService
 
     public async Task<ZoneDto> CreateZoneAsync(CreateZoneRequest request, int userId)
     {
+        await TenantAccess.RequireAsync(_db, userId, request.OutletId);
         var zone = new Zone { OutletId = request.OutletId, Name = request.Name, FloorPlanData = request.FloorPlanData };
         _db.Zones.Add(zone);
         await _db.SaveChangesAsync();

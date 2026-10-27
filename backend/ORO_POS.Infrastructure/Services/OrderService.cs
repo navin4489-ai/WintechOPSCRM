@@ -103,9 +103,7 @@ public class OrderService : IOrderService
 
         if (order == null) return null;
 
-        var user = await _db.Users.FindAsync(userId);
-        if (user != null && user.Role?.Name != "Owner" && order.OutletId != user.OutletId)
-            throw new UnauthorizedAccessException("Access denied to this order.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
 
         // Quote legacy open orders using today's application policy before the
         // cashier confirms payment. This read does not save or rewrite closed sales.
@@ -126,8 +124,7 @@ public class OrderService : IOrderService
 
     public async Task<PagedResult<OrderDto>> GetOrdersAsync(PagedRequest request, int? outletId, int userId)
     {
-        var user = await _db.Users.FindAsync(userId);
-        if (user == null) throw new UnauthorizedAccessException("User not found.");
+        outletId = await TenantAccess.ScopeAsync(_db, userId, outletId);
 
         var query = _db.Orders
             .Include(o => o.Table)
@@ -137,13 +134,7 @@ public class OrderService : IOrderService
 
         if (outletId.HasValue)
         {
-            if (!await ValidateOutletAccess(userId, outletId.Value))
-                throw new UnauthorizedAccessException("Access denied to outlet.");
             query = query.Where(o => o.OutletId == outletId.Value);
-        }
-        else if (user.Role?.Name != "Owner" && user.OutletId.HasValue)
-        {
-            query = query.Where(o => o.OutletId == user.OutletId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(request.Search))
@@ -165,7 +156,7 @@ public class OrderService : IOrderService
 
     private async Task<bool> ValidateOutletAccess(int userId, int outletId)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        var user = await _db.Users.Include(u=>u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
         if (user == null) return false;
         if (user.Role != null && user.Role.Name == "Owner") return true;
         return user.OutletId == outletId;
@@ -176,6 +167,7 @@ public class OrderService : IOrderService
         if (status != "Open") throw new InvalidOperationException("Use the dedicated payment, void or refund action to change financial status.");
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
         order.Status = status;
         order.UpdatedAt = DateTime.UtcNow;
         order.UpdatedBy = (await _db.Users.FindAsync(userId))?.Username;
@@ -199,6 +191,7 @@ public class OrderService : IOrderService
     {
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
         if (order.Status != "Open") throw new InvalidOperationException("Only open orders can be voided. Use refund for a settled sale.");
         if (string.IsNullOrWhiteSpace(request.Reason)) throw new InvalidOperationException("A void reason is required.");
         if (await _db.Payments.AnyAsync(p => p.OrderId == orderId && p.Status == "Captured"))
@@ -252,6 +245,7 @@ public class OrderService : IOrderService
         if (string.IsNullOrWhiteSpace(request.Reason)) throw new InvalidOperationException("A discount reason is required.");
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
         if (order.Status != "Open") throw new InvalidOperationException("Cannot discount a closed order.");
 
         var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId);
@@ -307,6 +301,7 @@ public class OrderService : IOrderService
     {
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
         if (order.Status != "Open") throw new InvalidOperationException("Cannot add items to a closed order.");
 
         await AddItemToOrderAsync(order, request, userId, save: false);
@@ -342,6 +337,7 @@ public class OrderService : IOrderService
         var order = await _db.Orders.Include(o => o.Payments).Include(o => o.OrderItems)
             .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
         var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
         if (user == null || (user.Role?.Name != "Owner" && user.OutletId != order.OutletId))
             throw new UnauthorizedAccessException("Access denied to this order.");
@@ -458,6 +454,7 @@ public class OrderService : IOrderService
     {
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
         if (order.Status != "Open") throw new InvalidOperationException("Only open orders can be transferred.");
         var destination = await _db.Tables.FindAsync(newTableId);
         if (destination == null || destination.OutletId != order.OutletId) throw new InvalidOperationException("Destination table must be in the same outlet.");
@@ -486,6 +483,8 @@ public class OrderService : IOrderService
         var source = await _db.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == sourceOrderId && !o.IsDeleted);
         var target = await _db.Orders.FindAsync(targetOrderId);
         if (source == null || target == null) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, source.OutletId);
+        await TenantAccess.RequireAsync(_db, userId, target.OutletId);
         if (source.Id == target.Id || source.Status != "Open" || target.Status != "Open" || source.OutletId != target.OutletId)
             throw new InvalidOperationException("Merge requires two different open orders in the same outlet.");
         if (source.DiscountAmount != 0 || target.DiscountAmount != 0 || await _db.Payments.AnyAsync(p => p.OrderId == sourceOrderId || p.OrderId == targetOrderId))
@@ -519,6 +518,7 @@ public class OrderService : IOrderService
     {
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        await TenantAccess.RequireAsync(_db, userId, order.OutletId);
         if (order.Status != "Open" || order.DiscountAmount != 0 || await _db.Payments.AnyAsync(p => p.OrderId == orderId))
             throw new InvalidOperationException("Split requires an open order without discounts or payments.");
         var destination = await _db.Tables.FindAsync(newTableId);

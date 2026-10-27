@@ -3,7 +3,7 @@
 ## Verified in this pass
 
 - API and Angular production builds succeed.
-- 42 backend tests pass in Release, including checkout/accounting regression tests in
+- 89 backend tests pass in Release, including checkout/accounting regression tests in
   `backend/ORO_POS.Tests/CheckoutTests.cs`.
 - Checkout persists the platform's existing 5% GST policy, rounded to paise.
 - Discounts update persisted GST/total; sales reports do not deduct discounts twice.
@@ -34,9 +34,24 @@ integration, hardware printing, security isolation, or load capacity.
 ## Hardening and Android release pass
 
 - Native Android 1.1.0 replaces the prototype with role-aware operations screens;
-  7 Flutter/widget tests pass and `flutter analyze` reports no issues.
+  9 Flutter/widget tests pass and `flutter analyze` reports no issues.
 - Android 1.2.0 adds Super Admin outlet configuration and QR poster printing,
   working-outlet switching and gallery-based item image uploads.
+- Android/web 1.3.0 outlet onboarding creates the outlet and its scoped admin
+  account in one transaction. One-time client-side credential handoff is available;
+  plaintext passwords are never included in server responses or audit values.
+- Service-level tenant checks now supplement controller authorization. Two-outlet
+  regression tests cover read and mutation denial across menu, stock, orders,
+  kitchen, staff, outlet settings, reports, shifts and images. Missing list scope
+  means the assigned outlet for tenant accounts, never all outlets.
+- Outlet admins can manage **My Outlet** details/QR but only Super Admin can
+  provision outlets. They cannot assign Super Admin or move themselves to a different outlet.
+- Mobile web navigation uses a drawer, layouts stack on narrow viewports, and
+  category creation is available on the catalogue page and within the item editor.
+- The Playwright suite contains 16 phone-width browser checks using synthetic API
+  fixtures. These supplement, not replace, live PostgreSQL authorization checks.
+- Customers can save a private tracking link and see preparation updates every
+  15 seconds while the confirmation page is visible. No SMS/WhatsApp is sent.
 - Public, no-login QR ordering supports server-priced carts, retry-safe request IDs,
   private order-status proofs and cash-at-outlet collection by authenticated staff.
   Links can be disabled or rotated. Closed outlets or missing shifts reject new orders.

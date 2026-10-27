@@ -30,8 +30,9 @@ class ApiService {
   String? imageUrl(dynamic value) => value is String && value.isNotEmpty
       ? Uri.parse(baseUrl).resolve(value).toString()
       : null;
-  String get outletName =>
-      _activeOutletName ?? user?.outletName ?? 'Outlet workspace';
+  String get outletName => user?.roleName == 'Owner'
+      ? (_activeOutletName ?? user?.outletName ?? 'Outlet workspace')
+      : (user?.outletName ?? 'Outlet workspace');
   void Function()? onSessionExpired;
   ApiService({http.Client? client, FlutterSecureStorage? storage})
     : client = client ?? http.Client(),
@@ -39,12 +40,18 @@ class ApiService {
   String? get token => _token;
   User? get user => _user;
   bool get isAuthenticated => _token != null && _user != null;
-  int get outletId =>
-      _activeOutlet ??
-      user?.outletId ??
-      (throw const ApiException(
+  int get outletId {
+    final id = user?.roleName == 'Owner'
+        ? (_activeOutlet ?? user?.outletId)
+        : user?.outletId;
+    if (id == null) {
+      throw const ApiException(
         'Assign this account to an outlet before using POS.',
-      ));
+      );
+    }
+    return id;
+  }
+
   bool can(String permission) =>
       user?.roleName == 'Owner' ||
       (user?.permissions.contains(permission) ?? false);

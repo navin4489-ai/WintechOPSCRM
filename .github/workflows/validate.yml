@@ -28,6 +28,8 @@ jobs:
           cache-dependency-path: web/oro-pos-web/package-lock.json
       - run: npm ci
       - run: npm run build -- --configuration production
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:responsive
   android-ui:
     runs-on: ubuntu-latest
     defaults:

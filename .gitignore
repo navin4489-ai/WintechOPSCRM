@@ -31,6 +31,8 @@ Thumbs.db
 *.log
 appsettings.Development.json
 .env
+**/test-results/
+**/playwright-report/
 private-backups/
 **/key.properties
 **/*.jks
