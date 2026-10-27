@@ -274,7 +274,16 @@ public class ShiftService : IShiftService
         shift.CountedCash = request.CountedCash;
         shift.Status = ShiftStatus.Closed.ToString();
         shift.ClosedBy = (await _db.Users.FindAsync(userId))?.Username;
-        shift.Variance = request.CountedCash - (shift.OpeningFloat + shift.PaidIn - shift.PaidOut);
+
+        // Cash expected = opening float + cash payments taken during the shift,
+        // matching the Z-report calculation so variance is consistent everywhere.
+        var cashSales = await _db.Orders
+            .Where(o => o.ShiftId == shift.Id && o.Status == "Closed")
+            .SelectMany(o => o.Payments)
+            .Where(p => p.TenderType == "Cash")
+            .SumAsync(p => (decimal?)p.Amount) ?? 0m;
+        var cashExpected = shift.OpeningFloat + shift.PaidIn - shift.PaidOut + cashSales;
+        shift.Variance = request.CountedCash - cashExpected;
 
         await _db.SaveChangesAsync();
         return MapToDto(shift);
