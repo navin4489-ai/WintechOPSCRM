@@ -34,7 +34,7 @@
     <section class="panel order-panel">
       <div class="panel-head">
         <h3 class="section-title mb-0">Current Order</h3>
-        <span class="order-no mono">{{ currentOrder?.orderNumber || '—' }}</span>
+        <span class="order-no mono" role="status">{{ tableLoading ? 'Loading order…' : (savingItem ? 'Saving…' : (currentOrder?.orderNumber || '—')) }}</span>
       </div>
 
       <div class="order-items">
@@ -60,12 +60,12 @@
       </div>
 
       <div class="payment-actions">
-        <button class="btn-success pay" (click)="openPaymentModal()" [disabled]="!orderItems.length">
+        <button class="btn-success pay" (click)="openPaymentModal()" [disabled]="!orderItems.length || tableLoading || savingItem">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
           Process Payment
         </button>
-        <button class="btn-ghost" (click)="openDiscountModal()" [disabled]="!orderItems.length">Discount</button>
-        <button class="btn-danger" (click)="voidOrder()" [disabled]="!currentOrder">Void</button>
+        <button class="btn-ghost" (click)="openDiscountModal()" [disabled]="!orderItems.length || tableLoading || savingItem">Discount</button>
+        <button class="btn-danger" (click)="voidOrder()" [disabled]="!currentOrder || tableLoading || savingItem">Void</button>
       </div>
     </section>
 
@@ -102,7 +102,7 @@
     <div class="modal-body">
       <div class="pay-total">
         <span>Amount Due</span>
-        <strong>{{ total | inr }}</strong>
+        <strong>{{ amountDue | inr }}</strong>
       </div>
 
       <div class="form-group">
@@ -126,8 +126,8 @@
 
     <div class="modal-foot">
       <button class="secondary" (click)="closePayment()">Cancel</button>
-      <button class="btn-success" (click)="confirmPayment()" [disabled]="processing || amountReceived < total">
-        @if (processing) { Processing… } @else { Confirm — {{ total | inr }} }
+      <button class="btn-success" (click)="confirmPayment()" [disabled]="processing || amountReceived < amountDue">
+        @if (processing) { Processing… } @else { Confirm — {{ amountDue | inr }} }
       </button>
     </div>
   </div>

@@ -97,6 +97,9 @@ export class ApiService {
   getOrderById(orderId: number): Observable<ApiResponse<OrderDto>> {
     return this.http.get<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}`);
   }
+  getOpenOrderForTable(tableId: number): Observable<ApiResponse<OrderDto>> {
+    return this.http.get<ApiResponse<OrderDto>>(`${this.base}/orders/table/${tableId}/open`);
+  }
   updateOrderStatus(orderId: number, status: string, reason?: string): Observable<ApiResponse<OrderDto>> {
     let url = `${this.base}/orders/${orderId}/status?status=${status}`;
     if (reason) url += `&reason=${reason}`;

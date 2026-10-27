@@ -89,6 +89,17 @@ public class OrderService : IOrderService
         return MapToOrderDto(order);
     }
 
+    public async Task<OrderDto?> GetOpenOrderForTableAsync(int tableId, int userId)
+    {
+        var table = await _db.Tables.FindAsync(tableId);
+        if (table == null) throw new KeyNotFoundException("Table not found.");
+        if (!await ValidateOutletAccess(userId, table.OutletId))
+            throw new UnauthorizedAccessException("Access denied to outlet.");
+        var id = await _db.Orders.Where(o => o.TableId == tableId && o.Status == "Open")
+            .OrderByDescending(o => o.CreatedAt).Select(o => (int?)o.Id).FirstOrDefaultAsync();
+        return id.HasValue ? await GetOrderByIdAsync(id.Value, userId) : null;
+    }
+
     public async Task<PagedResult<OrderDto>> GetOrdersAsync(PagedRequest request, int? outletId, int userId)
     {
         var user = await _db.Users.FindAsync(userId);
@@ -213,15 +224,18 @@ public class OrderService : IOrderService
         if (user == null) throw new UnauthorizedAccessException("User not found.");
 
         // ApplyDiscount permission: Owner/StoreManager always, otherwise role permission string.
+        if (user.Role?.Name != "Owner" && user.OutletId != order.OutletId)
+            throw new UnauthorizedAccessException("Access denied to this order.");
         bool canDiscount = user.Role?.Name == "Owner" || user.Role?.Name == "StoreManager" ||
-                           (user.Role?.Permissions?.Contains(nameof(Permission.ApplyDiscount)) ?? false);
+                           (JsonSerializer.Deserialize<string[]>(user.Role?.Permissions ?? "[]")?.Contains(nameof(Permission.ApplyDiscount)) ?? false);
         if (!canDiscount) throw new UnauthorizedAccessException("You do not have permission to apply a discount.");
 
         // Resolve discount amount: percentage (of subtotal) takes precedence when provided.
         decimal discount;
         if (request.Percent.HasValue)
         {
-            var pct = Math.Clamp(request.Percent.Value, 0m, 100m);
+            var pct = request.Percent.Value;
+            if (pct < 0 || pct > 100) throw new InvalidOperationException("Discount percentage must be between 0 and 100.");
             discount = Math.Round(order.Subtotal * pct / 100m, 2);
         }
         else
@@ -233,7 +247,7 @@ public class OrderService : IOrderService
 
         var before = new { order.DiscountAmount, order.TotalAmount };
         order.DiscountAmount = discount;
-        order.TotalAmount = order.Subtotal - order.DiscountAmount + order.TaxAmount;
+        await RecalculateOrderTotalsAsync(orderId);
         order.UpdatedAt = DateTime.UtcNow;
         order.UpdatedBy = user.Username;
         await _db.SaveChangesAsync();
@@ -279,19 +293,44 @@ public class OrderService : IOrderService
         _db.OrderItems.Remove(item);
         await _db.SaveChangesAsync();
         await RecalculateOrderTotalsAsync(orderId);
+        await _db.SaveChangesAsync();
         return await GetOrderByIdAsync(orderId, userId);
     }
 
     public async Task<OrderDto> ProcessPaymentAsync(int orderId, ProcessPaymentRequest request, int userId)
     {
-        var order = await _db.Orders.FindAsync(orderId);
+        // A serializable transaction prevents concurrent requests from capturing the
+        // same balance twice. A failed transaction must be retried after refreshing.
+        await using var transaction = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable)
+            : null;
+        var order = await _db.Orders.Include(o => o.Payments).Include(o => o.OrderItems)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
+        if (user == null || (user.Role?.Name != "Owner" && user.OutletId != order.OutletId))
+            throw new UnauthorizedAccessException("Access denied to this order.");
+        if (order.Status != "Open") throw new InvalidOperationException("Only open orders can receive payment.");
+        if (order.OrderItems.Count == 0) throw new InvalidOperationException("Cannot pay an empty order.");
+        if (request.TenderType != "Cash" && request.TenderType != "Card" && request.TenderType != "UPI")
+            throw new InvalidOperationException("Unsupported tender type.");
+        if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount)
+            throw new InvalidOperationException("Payment must be positive with at most two decimal places.");
+
+        await RecalculateOrderTotalsAsync(orderId);
+        var totalPaid = order.Payments.Where(p => p.Status == "Captured").Sum(p => p.Amount);
+        var balance = order.TotalAmount - totalPaid;
+        if (balance <= 0) throw new InvalidOperationException("Order has no remaining balance.");
+        if (request.TenderType != "Cash" && request.Amount > balance)
+            throw new InvalidOperationException("Non-cash payment cannot exceed the remaining balance.");
+        // Cash tendered can exceed the balance; change returned is not revenue.
+        var captured = Math.Min(request.Amount, balance);
 
         var payment = new Payment
         {
             OrderId = orderId,
             TenderType = request.TenderType,
-            Amount = request.Amount,
+            Amount = captured,
             Provider = request.Provider,
             Reference = request.Reference,
             Status = "Captured",
@@ -302,8 +341,7 @@ public class OrderService : IOrderService
 
         _db.Payments.Add(payment);
 
-        var totalPaid = order.Payments.Sum(p => p.Amount) + request.Amount;
-        if (totalPaid >= order.TotalAmount)
+        if (totalPaid + captured >= order.TotalAmount)
         {
             order.Status = "Closed";
             order.ClosedAt = DateTime.UtcNow;
@@ -313,18 +351,23 @@ public class OrderService : IOrderService
                 var table = await _db.Tables.FindAsync(order.TableId.Value);
                 if (table != null) table.Status = "Free";
             }
+            // Post actual product/recipe consumption exactly once, on settlement.
+            foreach (var item in order.OrderItems)
+            {
+                var recipes = await _db.Recipes.Where(r => r.ProductId == item.ProductId).ToListAsync();
+                if (recipes.Count == 0)
+                    _db.InventoryLedgers.Add(new InventoryLedger { ProductId = item.ProductId,
+                        MovementType = "Sale", Quantity = item.Quantity, ActorId = userId, Source = $"Order_{orderId}" });
+                else
+                    foreach (var recipe in recipes)
+                        _db.InventoryLedgers.Add(new InventoryLedger { ProductId = recipe.IngredientId,
+                            MovementType = "Sale", Quantity = recipe.Quantity * item.Quantity,
+                            ActorId = userId, Source = $"Order_{orderId}" });
+            }
         }
 
-        // Deduct inventory for qualifying sales
-        await _inventory.RecordInventoryMovementAsync(new RecordInventoryRequest
-        {
-            ProductId = null,
-            MovementType = "Sale",
-            Quantity = 0,
-            Source = $"Order_{orderId}"
-        }, userId);
-
         await _db.SaveChangesAsync();
+        if (transaction != null) await transaction.CommitAsync();
         return await GetOrderByIdAsync(orderId, userId);
     }
 
@@ -452,6 +495,9 @@ public class OrderService : IOrderService
         if (order == null) return;
 
         order.Subtotal = order.OrderItems.Sum(i => i.LineTotal);
+        order.DiscountAmount = Math.Clamp(order.DiscountAmount, 0m, order.Subtotal);
+        // Match the platform's existing 5% GST policy, rounded to paise on the server.
+        order.TaxAmount = Math.Round((order.Subtotal - order.DiscountAmount) * 0.05m, 2, MidpointRounding.AwayFromZero);
         order.TotalAmount = order.Subtotal - order.DiscountAmount + order.TaxAmount;
         order.UpdatedAt = DateTime.UtcNow;
     }

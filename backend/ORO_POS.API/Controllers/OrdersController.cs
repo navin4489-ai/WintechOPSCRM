@@ -30,6 +30,13 @@ public class OrdersController : ControllerBase
         return order == null ? NotFound() : Ok(new ApiResponse<OrderDto> { Success = true, Data = order });
     }
 
+    [HttpGet("table/{tableId}/open")]
+    public async Task<IActionResult> GetOpenForTable(int tableId)
+    {
+        var order = await _order.GetOpenOrderForTableAsync(tableId, GetUserId());
+        return Ok(new ApiResponse<OrderDto?> { Success = true, Data = order });
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? outletId = null, [FromQuery] string? search = null)
     {

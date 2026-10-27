@@ -24,6 +24,7 @@ public interface IOrderService
 {
     Task<OrderDto> CreateOrderAsync(CreateOrderRequest request, int userId);
     Task<OrderDto?> GetOrderByIdAsync(int orderId, int userId);
+    Task<OrderDto?> GetOpenOrderForTableAsync(int tableId, int userId);
     Task<PagedResult<OrderDto>> GetOrdersAsync(PagedRequest request, int? outletId, int userId);
     Task<OrderDto> UpdateOrderStatusAsync(int orderId, string status, int userId, string? reason = null);
     Task<OrderDto> VoidOrderAsync(int orderId, VoidOrderRequest request, int userId);

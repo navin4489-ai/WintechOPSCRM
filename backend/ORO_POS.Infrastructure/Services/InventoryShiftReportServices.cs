@@ -269,6 +269,7 @@ public class ShiftService : IShiftService
     {
         var shift = await _db.Shifts.FindAsync(request.ShiftId);
         if (shift == null || shift.Status != ShiftStatus.Open.ToString()) throw new KeyNotFoundException("Open shift not found.");
+        if (request.CountedCash < 0) throw new InvalidOperationException("Counted cash cannot be negative.");
 
         shift.CloseTime = DateTime.UtcNow;
         shift.CountedCash = request.CountedCash;
@@ -277,10 +278,8 @@ public class ShiftService : IShiftService
 
         // Cash expected = opening float + cash payments taken during the shift,
         // matching the Z-report calculation so variance is consistent everywhere.
-        var cashSales = await _db.Orders
-            .Where(o => o.ShiftId == shift.Id && o.Status == "Closed")
-            .SelectMany(o => o.Payments)
-            .Where(p => p.TenderType == "Cash")
+        var cashSales = await _db.Payments
+            .Where(p => p.Order.ShiftId == shift.Id && p.TenderType == "Cash" && p.Status == "Captured")
             .SumAsync(p => (decimal?)p.Amount) ?? 0m;
         var cashExpected = shift.OpeningFloat + shift.PaidIn - shift.PaidOut + cashSales;
         shift.Variance = request.CountedCash - cashExpected;
@@ -329,12 +328,14 @@ public class ShiftService : IShiftService
 
         var orders = await _db.Orders.Include(o => o.Payments).Where(o => o.ShiftId == shiftId && o.Status == "Closed").ToListAsync();
 
-        var grossSales = orders.Sum(o => o.TotalAmount);
+        var grossSales = orders.Sum(o => o.Subtotal);
         var discounts = orders.Sum(o => o.DiscountAmount);
         var taxes = orders.Sum(o => o.TaxAmount);
         var netSales = grossSales - discounts;
 
-        var cashExpected = shift.OpeningFloat + orders.Where(o => o.Payments.Any(p => p.TenderType == "Cash")).Sum(o => o.Payments.Where(p => p.TenderType == "Cash").Sum(p => p.Amount));
+        var cashSales = await _db.Payments.Where(p => p.Order.ShiftId == shiftId && p.TenderType == "Cash" && p.Status == "Captured")
+            .SumAsync(p => (decimal?)p.Amount) ?? 0m;
+        var cashExpected = shift.OpeningFloat + shift.PaidIn - shift.PaidOut + cashSales;
         var cashCounted = shift.CountedCash;
         var variance = cashCounted - cashExpected;
 
@@ -384,7 +385,7 @@ public class ReportService : IReportService
 
     public async Task<List<SalesReportDto>> GetSalesReportAsync(SalesReportRequest request, int userId)
     {
-        var query = _db.Orders.Include(o => o.Payments).Where(o => o.Status == "Closed" && !o.IsDeleted);
+        var query = _db.Orders.Include(o => o.Payments).Include(o => o.User).Where(o => o.Status == "Closed" && !o.IsDeleted);
 
         if (request.OutletId.HasValue) query = query.Where(o => o.OutletId == request.OutletId.Value);
         if (request.FromDate.HasValue) query = query.Where(o => o.CreatedAt >= request.FromDate.Value);
@@ -405,13 +406,13 @@ public class ReportService : IReportService
         {
             GroupKey = g.Key,
             OrderCount = g.Count(),
-            GrossSales = g.Sum(o => o.TotalAmount),
+            GrossSales = g.Sum(o => o.Subtotal),
             Discounts = g.Sum(o => o.DiscountAmount),
             Taxes = g.Sum(o => o.TaxAmount),
-            NetSales = g.Sum(o => o.TotalAmount - o.DiscountAmount),
+            NetSales = g.Sum(o => o.Subtotal - o.DiscountAmount),
             Cash = g.Sum(o => o.Payments.Where(p => p.TenderType == "Cash").Sum(p => p.Amount)),
             Card = g.Sum(o => o.Payments.Where(p => p.TenderType == "Card").Sum(p => p.Amount)),
-            DigitalWallet = g.Sum(o => o.Payments.Where(p => p.TenderType == "DigitalWallet").Sum(p => p.Amount))
+            DigitalWallet = g.Sum(o => o.Payments.Where(p => p.TenderType == "DigitalWallet" || p.TenderType == "UPI").Sum(p => p.Amount))
         }).ToList();
     }
 

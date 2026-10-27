@@ -25,6 +25,8 @@ export class PosComponent implements OnInit {
   outlet: any;
   selectedTableId: number | null = null;
   searchTerm = '';
+  tableLoading = false;
+  savingItem = false;
 
   // Payment modal
   showPayment = false;
@@ -66,7 +68,13 @@ export class PosComponent implements OnInit {
   }
 
   get changeDue(): number {
-    return Math.max(0, this.amountReceived - this.total);
+    return Math.max(0, this.amountReceived - this.amountDue);
+  }
+
+  get amountDue(): number {
+    const paid = (this.currentOrder?.payments || [])
+      .filter(p => p.status === 'Captured').reduce((sum, p) => sum + p.amount, 0);
+    return Math.max(0, Math.round((this.total - paid) * 100) / 100);
   }
 
   /** Live preview of the discounted total (subtotal - discount + GST on the net). */
@@ -80,27 +88,28 @@ export class PosComponent implements OnInit {
   }
 
   selectTable(t: TableDto) {
+    if (this.tableLoading || this.savingItem || this.processing) return;
     this.selectedTableId = t.id;
+    this.currentOrder = null;
+    this.orderItems = [];
+    this.calculateTotals();
+    this.tableLoading = true;
     if (!t.hasOpenOrder) {
       this.createOrderForTable(t.id);
     } else {
-      // Load the full order (with its items) for this table. The list endpoint
-      // omits orderItems, so we resolve the order id then fetch it by id.
-      this.api.getOrders(1, 50, this.user?.outletId).subscribe({
-        next: (res: ApiResponse<any>) => {
-          const list = res.data?.items || res.data || [];
-          const open = (list as any[]).find((o: any) => o.tableId === t.id && o.status !== 'Closed' && o.status !== 'Void');
-          if (!open) return;
-          this.api.getOrderById(open.id).subscribe({
-            next: (detail) => {
-              if (detail.success && detail.data) {
-                this.currentOrder = detail.data as OrderDto;
-                this.orderItems = detail.data.orderItems || [];
-                this.calculateTotals();
-              }
-            },
-            error: () => { this.currentOrder = open; this.orderItems = open.orderItems || []; this.calculateTotals(); }
-          });
+      // Dedicated lookup avoids silently missing orders beyond the first list page.
+      this.api.getOpenOrderForTable(t.id).subscribe({
+        next: (res) => {
+          this.tableLoading = false;
+          if (res.success && res.data) {
+            this.currentOrder = res.data;
+            this.orderItems = res.data.orderItems || [];
+            this.calculateTotals();
+          } else this.toast.warning('No open order found. Refresh the table list.');
+        },
+        error: (err) => {
+          this.tableLoading = false;
+          this.toast.error(this.errMsg(err, 'Could not load this table. Please retry.'));
         }
       });
     }
@@ -115,13 +124,17 @@ export class PosComponent implements OnInit {
     };
     this.api.createOrder(req).subscribe({
       next: (res: ApiResponse<OrderDto>) => {
+        this.tableLoading = false;
         if (res.success && res.data) {
           this.currentOrder = res.data as OrderDto;
           this.orderItems = res.data.orderItems;
           this.calculateTotals();
+          const table = this.tables.find(t => t.id === tableId);
+          if (table) { table.hasOpenOrder = true; table.status = 'Occupied'; }
         }
       },
       error: (err) => {
+        this.tableLoading = false;
         const m = this.errMsg(err, 'Could not start an order for this table.');
         this.toast.error(m);
         if (/shift/i.test(m)) this.toast.info('Open a shift from the Shifts page, then try again.');
@@ -130,39 +143,45 @@ export class PosComponent implements OnInit {
   }
 
   addItem(p: ProductDto) {
+    if (this.tableLoading || this.savingItem || this.processing) return;
     if (!this.currentOrder) { this.toast.warning('Select a table first to start an order.'); return; }
+    this.savingItem = true;
     const item: OrderItemRequest = { productId: p.id, quantity: 1, modifierOptionIds: [], notes: '' };
     this.api.addOrderItem(this.currentOrder.id, item).subscribe({
       next: (res: ApiResponse<OrderDto>) => {
+        this.savingItem = false;
         if (res.success && res.data) {
           this.currentOrder = res.data as OrderDto;
           this.orderItems = res.data.orderItems;
           this.calculateTotals();
         }
       },
-      error: (err) => this.toast.error(this.errMsg(err, `Could not add ${p.name}.`))
+      error: (err) => { this.savingItem = false; this.toast.error(this.errMsg(err, `Could not add ${p.name}.`)); }
     });
   }
 
   removeItem(index: number) {
+    if (this.tableLoading || this.savingItem || this.processing || !this.currentOrder) return;
+    this.savingItem = true;
     const item = this.orderItems[index];
     this.api.removeOrderItem(this.currentOrder!.id, item.id).subscribe({
       next: (res: ApiResponse<OrderDto>) => {
+        this.savingItem = false;
         if (res.success && res.data) {
           this.currentOrder = res.data as OrderDto;
           this.orderItems = res.data.orderItems;
           this.calculateTotals();
         }
       },
-      error: (err) => this.toast.error(this.errMsg(err, 'Could not remove item.'))
+      error: (err) => { this.savingItem = false; this.toast.error(this.errMsg(err, 'Could not remove item.')); }
     });
   }
 
   calculateTotals() {
-    this.subtotal = this.orderItems.reduce((s: number, i: any) => s + i.lineTotal, 0);
+    this.subtotal = this.currentOrder?.subtotal ?? 0;
     this.discount = this.currentOrder?.discountAmount ?? 0;
-    this.tax = (this.subtotal - this.discount) * this.taxRate;
-    this.total = this.subtotal - this.discount + this.tax;
+    this.tax = this.currentOrder?.taxAmount ?? 0;
+    this.total = this.currentOrder?.totalAmount ?? 0;
   }
 
   openDiscountModal() {
@@ -200,7 +219,7 @@ export class PosComponent implements OnInit {
 
   openPaymentModal() {
     if (!this.currentOrder || this.orderItems.length === 0) { this.toast.warning('Add items before taking payment.'); return; }
-    this.amountReceived = this.total;
+    this.amountReceived = this.amountDue;
     this.tenderType = 'Cash';
     this.showPayment = true;
   }
@@ -209,13 +228,21 @@ export class PosComponent implements OnInit {
 
   confirmPayment() {
     if (this.processing) return;
-    if (this.amountReceived < this.total) { this.toast.warning('Amount received is less than the order total.'); return; }
+    if (!Number.isFinite(this.amountReceived) || this.amountReceived < this.amountDue) { this.toast.warning('Enter a valid amount covering the remaining balance.'); return; }
     this.processing = true;
-    const req = { orderId: this.currentOrder!.id, tenderType: this.tenderType, amount: this.amountReceived };
+    const req = { orderId: this.currentOrder!.id, tenderType: this.tenderType, amount: this.amountDue };
     this.api.processPayment(this.currentOrder!.id, req).subscribe({
       next: (res) => {
         this.processing = false;
         if (res.success) {
+          if (res.data && res.data.status !== 'Closed') {
+            this.currentOrder = res.data;
+            this.orderItems = res.data.orderItems || [];
+            this.calculateTotals();
+            this.showPayment = false;
+            this.toast.warning('Payment recorded, but a balance remains. Refresh and review the order before continuing.');
+            return;
+          }
           this.showPayment = false;
           this.currentOrder = null;
           this.orderItems = [];
