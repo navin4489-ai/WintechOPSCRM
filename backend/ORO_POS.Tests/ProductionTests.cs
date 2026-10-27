@@ -59,6 +59,7 @@ public class ProductionTests
         using var db = Database();
         Assert.IsType<ForbidResult>((await Invoke(db, "Orders", "Refund", "POST", new())).Result);
         Assert.IsType<ForbidResult>((await Invoke(db, "Reports", "GetSalesReport", "GET", new())).Result);
+        Assert.IsType<ForbidResult>((await Invoke(db, "SuperAdmin", "List", "GET", new())).Result);
     }
     [Fact]
     public async Task DeactivatedSessionStopsImmediately()

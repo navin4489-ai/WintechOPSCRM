@@ -16,6 +16,7 @@
   <div class="overlay"><section class="dialog" role="dialog" aria-modal="true" aria-label="Order bill">
     <div class="panel-head"><h2>{{ selected.orderNumber }}</h2><button (click)="selected = null" [disabled]="busy" aria-label="Close bill">×</button></div>
     <p>{{ selected.status }} · {{ selected.serviceType }} · {{ selected.createdAt | date:'short' }}</p>
+    @if(selected.notes){<p style="white-space:pre-line">{{selected.notes}}</p>}
     <table><tbody>@for (i of selected.orderItems; track i.id) { <tr><td>{{ i.quantity }} × {{ i.productName }}</td><td>{{ i.lineTotal | inr }}</td></tr> }</tbody></table>
     <div class="totals"><p>Subtotal <strong>{{ selected.subtotal | inr }}</strong></p><p>Discount <strong>{{ selected.discountAmount | inr }}</strong></p><p>GST <strong>{{ selected.taxAmount | inr }}</strong></p><h3>Total <strong>{{ selected.totalAmount | inr }}</strong></h3></div>
     @if (refund) {
@@ -24,5 +25,6 @@
         <button type="submit" class="btn-danger" [disabled]="busy">Record full refund</button></form>
     }
     <div class="actions"><button (click)="print()" [disabled]="busy">Print receipt</button>@if (selected.status === 'Closed' && can('RefundOrder')) { <button class="btn-danger" (click)="refund = !refund" [disabled]="busy">Refund</button> }</div>
+    @if(selected.status==='Open'&&selected.orderItems.length&&can('EditOrder')){<form (ngSubmit)="collectCash()"><h3>Collect cash at outlet</h3><p>Outstanding: {{balance|inr}}. Your cash shift must be open.</p><label>Cash received<input type="number" name="cashReceived" [(ngModel)]="cashReceived" [min]="balance" step="0.01" required/></label><button type="submit" [disabled]="busy||cashReceived<balance">Record cash payment</button></form>}
   </section></div>
 }

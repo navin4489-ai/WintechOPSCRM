@@ -47,6 +47,13 @@ export class AuthService {
   getCurrentUser(): UserDto | null {
     return this.currentUserSubject.value;
   }
+  selectOutlet(outletId: number, outletName: string): void {
+    const user = this.getCurrentUser();
+    if (!user || user.roleName !== 'Owner') throw new Error('Super Admin access required.');
+    const selected = {...user, outletId, outletName};
+    localStorage.setItem(USER_KEY, JSON.stringify(selected));
+    this.currentUserSubject.next(selected);
+  }
 
   isAuthenticated(): boolean {
     return !!this.getToken();

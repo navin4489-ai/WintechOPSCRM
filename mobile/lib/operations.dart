@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'api_service.dart';
 import 'brand.dart';
@@ -21,6 +26,8 @@ class OperationsScreen extends StatefulWidget {
 }
 
 class _OperationsScreenState extends State<OperationsScreen> {
+  Timer? kitchenPoll;
+  bool fetching = false;
   bool loading = true, busy = false;
   String? error;
   dynamic data;
@@ -34,11 +41,24 @@ class _OperationsScreenState extends State<OperationsScreen> {
   void initState() {
     super.initState();
     load();
+    if (module == 'Kitchen') {
+      kitchenPoll = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!loading && !busy && mounted) load(silent: true);
+      });
+    }
   }
 
-  Future<void> load() async {
+  @override
+  void dispose() {
+    kitchenPoll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load({bool silent = false}) async {
+    if (fetching) return;
+    fetching = true;
     setState(() {
-      loading = true;
+      if (!silent) loading = true;
       error = null;
     });
     try {
@@ -58,6 +78,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
         'Reports' => '/reports/sales?outletId=$outlet$reportQuery',
         'Audit log' => '/reports/audit?outletId=$outlet&page=$page&pageSize=20',
         'Staff' => '/users',
+        'Super Admin' => '/super-admin/outlets',
         _ => throw const ApiException('Unknown module'),
       });
       dynamic open;
@@ -78,6 +99,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
+      fetching = false;
       if (mounted) setState(() => loading = false);
     }
   }
@@ -299,35 +321,242 @@ class _OperationsScreenState extends State<OperationsScreen> {
     });
   }
 
-  Future<void> addProduct() async {
+  Future<void> addProduct([dynamic product]) async {
     await run(() async {
       final categories =
           await api.request('/categories/outlet/${api.outletId}') as List;
       if (!mounted) return;
-      final value = await askForm(context, 'Create product', [
-        const FormFieldSpec('name', 'Product name'),
-        const FormFieldSpec('sku', 'Unique SKU'),
-        const FormFieldSpec('barcode', 'Barcode', optional: true),
-        FormFieldSpec(
-          'categoryId',
-          'Category',
-          choices: {for (final c in categories) '${c['id']}': '${c['name']}'},
-        ),
-        const FormFieldSpec('price', 'Price (INR)', number: true),
-        const FormFieldSpec('description', 'Description', optional: true),
-      ]);
+      final value = await askForm(
+        context,
+        product == null ? 'Create product' : 'Edit item',
+        [
+          FormFieldSpec(
+            'name',
+            'Product name',
+            initial: product?['name'] ?? '',
+          ),
+          FormFieldSpec('sku', 'Unique SKU', initial: product?['sku'] ?? ''),
+          FormFieldSpec(
+            'barcode',
+            'Barcode',
+            optional: true,
+            initial: product?['barcode'] ?? '',
+          ),
+          FormFieldSpec(
+            'categoryId',
+            'Category',
+            initial: '${product?['categoryId'] ?? ''}',
+            choices: {for (final c in categories) '${c['id']}': '${c['name']}'},
+          ),
+          FormFieldSpec(
+            'price',
+            'Price (INR)',
+            number: true,
+            initial: '${product?['price'] ?? ''}',
+          ),
+          FormFieldSpec(
+            'description',
+            'Description',
+            optional: true,
+            initial: product?['description'] ?? '',
+          ),
+          FormFieldSpec(
+            'available',
+            'Availability',
+            initial: product?['isAvailable'] == false ? 'no' : 'yes',
+            choices: const {
+              'yes': 'Available on POS and public menu',
+              'no': 'Unavailable',
+            },
+          ),
+        ],
+      );
       if (value == null) return;
       value['categoryId'] = int.parse(value['categoryId']);
       await api.request(
-        '/products',
-        method: 'POST',
+        product == null ? '/products' : '/products/${product['id']}',
+        method: product == null ? 'POST' : 'PUT',
         body: {
           ...value,
           'outletId': api.outletId,
-          'isAvailable': true,
+          'isAvailable': value.remove('available') == 'yes',
           'taxClass': 'Standard',
           'sortOrder': 0,
         },
+      );
+    });
+  }
+
+  Future<void> productImage(dynamic product) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 80,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      await run(() => api.uploadProductImage(product['id'], bytes));
+    } catch (e) {
+      if (mounted) notify(context, e);
+    }
+  }
+
+  Future<void> outletForm([dynamic outlet]) async {
+    final value = await askForm(
+      context,
+      outlet == null ? 'Create outlet' : 'Outlet configuration',
+      [
+        FormFieldSpec('name', 'Outlet name', initial: outlet?['name'] ?? ''),
+        FormFieldSpec(
+          'address',
+          'Address',
+          initial: outlet?['address'] ?? '',
+          optional: true,
+        ),
+        FormFieldSpec(
+          'phone',
+          'Phone',
+          initial: outlet?['phone'] ?? '',
+          optional: true,
+        ),
+        FormFieldSpec(
+          'timezone',
+          'Timezone',
+          initial: outlet?['timezone'] ?? 'Asia/Kolkata',
+        ),
+        FormFieldSpec(
+          'operating',
+          'Outlet status',
+          initial: outlet?['isOperating'] == false ? 'no' : 'yes',
+          choices: const {'yes': 'Operating', 'no': 'Closed'},
+        ),
+      ],
+    );
+    if (value == null) return;
+    await run(() async {
+      await api.request(
+        outlet == null
+            ? '/super-admin/outlets'
+            : '/super-admin/outlets/${outlet['id']}',
+        method: outlet == null ? 'POST' : 'PUT',
+        body: {
+          ...value,
+          'id': outlet?['id'] ?? 0,
+          'currency': 'INR',
+          'isOperating': value.remove('operating') == 'yes',
+          'taxSetup': outlet?['taxSetup'],
+        },
+      );
+    });
+  }
+
+  Future<void> outletQr(dynamic outlet) async {
+    await run(() async {
+      var config = Map<String, dynamic>.from(
+        await api.request('/super-admin/outlets/${outlet['id']}/ordering'),
+      );
+      if (!mounted) return;
+      bool updating = false;
+      await showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, update) => AlertDialog(
+            title: Text('${outlet['name']} · Ordering QR'),
+            content: SizedBox(
+              width: 430,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Customers scan this code, order without signing in and pay cash at the outlet. An open staff shift is required.',
+                    ),
+                    if (config['qrPngBase64'] != null)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Image.memory(
+                          base64Decode(config['qrPngBase64']),
+                          width: 230,
+                          height: 230,
+                        ),
+                      ),
+                    if (config['publicUrl'] != null)
+                      SelectableText(
+                        config['publicUrl'],
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    const SizedBox(height: 12),
+                    Text(
+                      config['enabled'] == true
+                          ? 'Public ordering enabled'
+                          : 'Public ordering disabled',
+                    ),
+                    if (updating) const LinearProgressIndicator(),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: updating ? null : () => Navigator.pop(ctx),
+                child: const Text('Done'),
+              ),
+              if (config['publicUrl'] != null)
+                TextButton(
+                  onPressed: () => Clipboard.setData(
+                    ClipboardData(text: config['publicUrl']),
+                  ),
+                  child: const Text('Copy link'),
+                ),
+              if (config['qrPngBase64'] != null)
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await printOutletQr(
+                        outlet['name'],
+                        config['qrPngBase64'],
+                        config['publicUrl'],
+                      );
+                    } catch (e) {
+                      if (ctx.mounted) notify(ctx, e);
+                    }
+                  },
+                  child: const Text('Print QR'),
+                ),
+              FilledButton(
+                onPressed: updating
+                    ? null
+                    : () async {
+                        update(() => updating = true);
+                        try {
+                          final result = await api.request(
+                            '/super-admin/outlets/${outlet['id']}/ordering',
+                            method: 'POST',
+                            body: {
+                              'enabled': config['enabled'] != true,
+                              'rotateKey': false,
+                            },
+                          );
+                          if (ctx.mounted) {
+                            update(
+                              () => config = Map<String, dynamic>.from(result),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) notify(ctx, e);
+                        } finally {
+                          if (ctx.mounted) update(() => updating = false);
+                        }
+                      },
+                child: Text(
+                  config['enabled'] == true ? 'Disable' : 'Enable & generate',
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     });
   }
@@ -366,6 +595,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
   Future<void> staffForm([dynamic staff]) async {
     await run(() async {
       final roles = await api.request('/roles') as List;
+      final outlets = await api.request('/outlets') as List;
       if (!mounted) return;
       final value = await askForm(
         context,
@@ -392,6 +622,12 @@ class _OperationsScreenState extends State<OperationsScreen> {
                 '${roles.where((r) => r['name'] == staff?['roleName']).firstOrNull?['id'] ?? ''}',
             choices: {for (final r in roles) '${r['id']}': '${r['name']}'},
           ),
+          FormFieldSpec(
+            'outletId',
+            'Assigned outlet',
+            initial: '${staff?['outletId'] ?? api.outletId}',
+            choices: {for (final o in outlets) '${o['id']}': '${o['name']}'},
+          ),
           if (staff != null)
             FormFieldSpec(
               'active',
@@ -408,7 +644,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
       }
       if (value['password'] == '') value.remove('password');
       value['roleId'] = int.parse(value['roleId']);
-      value['outletId'] = api.outletId;
+      value['outletId'] = int.parse(value['outletId']);
       if (staff != null) value['isActive'] = value.remove('active') == 'yes';
       await api.request(
         staff == null ? '/users' : '/users/${staff['id']}',
@@ -718,17 +954,90 @@ class _OperationsScreenState extends State<OperationsScreen> {
         trailing: Text(r['hasOpenOrder'] == true ? 'Occupied' : 'Free'),
       ),
       'Catalogue' => ListTile(
-        leading: CircleAvatar(
-          backgroundColor: gold.withValues(alpha: .15),
-          child: Text('${r['name']}'.substring(0, 1)),
-        ),
+        leading: api.imageUrl(r['imageUrl']) != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  api.imageUrl(r['imageUrl'])!,
+                  width: 52,
+                  height: 52,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.image_not_supported_outlined),
+                ),
+              )
+            : CircleAvatar(
+                backgroundColor: gold.withValues(alpha: .15),
+                child: Text('${r['name']}'.substring(0, 1)),
+              ),
         title: Text('${r['name']}'),
         subtitle: Text(
           '${r['sku']} · ${r['categoryName']} · ${r['isAvailable'] == true ? 'Available' : 'Unavailable'}',
         ),
-        trailing: Text(
-          formatInr(money(r['price'])),
-          style: const TextStyle(fontWeight: FontWeight.w800),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              formatInr(money(r['price'])),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            if (api.can('ManageSettings'))
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    addProduct(r);
+                  } else if (value == 'upload') {
+                    productImage(r);
+                  } else {
+                    run(() async {
+                      await api.request(
+                        '/products/${r['id']}/image',
+                        method: 'DELETE',
+                      );
+                    });
+                  }
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit item')),
+                  const PopupMenuItem(
+                    value: 'upload',
+                    child: Text('Upload image'),
+                  ),
+                  if (r['imageUrl'] != null)
+                    const PopupMenuItem(
+                      value: 'remove',
+                      child: Text('Remove image'),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+      'Super Admin' => ListTile(
+        leading: const Icon(Icons.storefront_outlined),
+        title: Text('${r['name']}'),
+        subtitle: Text(
+          '${r['address'] ?? ''}\n${r['isOperating'] == true ? 'Operating' : 'Closed'} · INR',
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) async {
+            if (value == 'edit') {
+              outletForm(r);
+            } else if (value == 'qr') {
+              outletQr(r);
+            } else {
+              await api.selectOutlet(r['id'], r['name']);
+              widget.onNavigate('Overview');
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'edit', child: Text('Configure outlet')),
+            PopupMenuItem(value: 'qr', child: Text('Public ordering QR')),
+            PopupMenuItem(
+              value: 'use',
+              child: Text('Use this outlet workspace'),
+            ),
+          ],
         ),
       ),
       'Inventory' => ListTile(
@@ -926,6 +1235,13 @@ class _OperationsScreenState extends State<OperationsScreen> {
           icon: const Icon(Icons.print_outlined),
           label: const Text('Print / PDF'),
         ),
+    ],
+    'Super Admin' => [
+      FilledButton.icon(
+        onPressed: busy ? null : () => outletForm(),
+        icon: const Icon(Icons.add_business_outlined),
+        label: const Text('Add outlet'),
+      ),
     ],
     _ => [],
   };

@@ -54,6 +54,32 @@ public class ProductsController : ControllerBase
         return CreatedAtAction(nameof(Get), new { outletId = request.OutletId }, new ApiResponse<ProductDto> { Success = true, Data = created });
     }
 
+    [HttpPost("{productId:int}/image"), RequestSizeLimit(1100000)]
+    public async Task<IActionResult> UploadImage(int productId, IFormFile file, [FromServices] ORO_POS.Infrastructure.Services.ProductImageService images)
+    {
+        if (file.Length == 0 || file.Length > ORO_POS.Infrastructure.Services.ProductImageService.MaximumBytes)
+            return BadRequest(new ApiResponse<object> { Success = false, Errors = new[] { "Choose an image up to 1 MB." } });
+        using var buffer = new MemoryStream(); await file.CopyToAsync(buffer);
+        var url = await images.SaveAsync(productId, buffer.ToArray(), GetUserId());
+        return Ok(new ApiResponse<object> { Success = true, Data = new { imageUrl = url } });
+    }
+    [HttpPut("{productId:int}")]
+    public async Task<IActionResult> Update(int productId, CreateProductRequest request)
+        => Ok(new ApiResponse<ProductDto> { Success = true, Data = await _menu.UpdateProductAsync(productId, request, GetUserId()) });
+    [HttpDelete("{productId:int}/image")]
+    public async Task<IActionResult> RemoveImage(int productId, [FromServices] ORO_POS.Infrastructure.Services.ProductImageService images)
+    { await images.RemoveAsync(productId, GetUserId()); return Ok(new ApiResponse<object> { Success = true }); }
+    [HttpGet("{productId:int}/image"), AllowAnonymous]
+    public async Task<IActionResult> Image(int productId, [FromServices] ORO_POS.Infrastructure.Data.AppDbContext db)
+    {
+        var image = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(db.ProductImages.Where(i => i.ProductId == productId && !i.Product.IsDeleted));
+        if (image == null) return NotFound();
+        var etag = $"\"{image.Hash}\"";
+        Response.Headers.ETag = etag; Response.Headers.CacheControl = "public,max-age=86400"; Response.Headers.XContentTypeOptions = "nosniff";
+        if (Request.Headers.IfNoneMatch.ToString() == etag) return StatusCode(304);
+        return File(image.Data, image.ContentType);
+    }
+
     private int GetUserId() => int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
 }
 

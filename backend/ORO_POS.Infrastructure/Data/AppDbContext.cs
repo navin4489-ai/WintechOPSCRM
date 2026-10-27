@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ModifierGroup> ModifierGroups => Set<ModifierGroup>();
     public DbSet<ModifierOption> ModifierOptions => Set<ModifierOption>();
     public DbSet<ProductModifierGroup> ProductModifierGroups => Set<ProductModifierGroup>();
@@ -59,6 +60,10 @@ public class AppDbContext : DbContext
             e.HasIndex(p => p.Barcode);
             e.HasOne(p => p.Outlet).WithMany(o => o.Products).HasForeignKey(p => p.OutletId).OnDelete(DeleteBehavior.NoAction);
             e.HasOne(p => p.Category).WithMany(c => c.Products).HasForeignKey(p => p.CategoryId).OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<ProductImage>(e => {
+            e.HasIndex(i => i.ProductId).IsUnique();
+            e.HasOne(i => i.Product).WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Order>(e =>

@@ -15,6 +15,7 @@ import { OperationsComponent } from './components/operations/operations.componen
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
+  { path: 'order/:key', loadComponent: () => import('./components/public-order/public-order.component').then(m => m.PublicOrderComponent) },
   {
     path: '',
     component: LayoutComponent,
@@ -32,6 +33,7 @@ export const routes: Routes = [
       { path: 'staff', component: StaffComponent },
       { path: 'orders', component: OperationsComponent },
       { path: 'audit', component: OperationsComponent, data: { audit: true } },
+      { path: 'super-admin', loadComponent: () => import('./components/super-admin/super-admin.component').then(m => m.SuperAdminComponent) },
     ]
   },
   { path: '**', redirectTo: 'dashboard' }

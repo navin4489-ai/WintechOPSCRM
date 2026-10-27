@@ -23,6 +23,16 @@ export class ApiService {
   private base = `${environment.apiUrl}`;
 
   constructor(private http: HttpClient) {}
+  uploadProductImage(id: number, file: File): Observable<ApiResponse<{imageUrl:string}>> { const form = new FormData(); form.append('file',file); return this.http.post<ApiResponse<{imageUrl:string}>>(`${this.base}/products/${id}/image`, form); }
+  removeProductImage(id: number): Observable<ApiResponse<unknown>> { return this.http.delete<ApiResponse<unknown>>(`${this.base}/products/${id}/image`); }
+  saveProduct(id: number, request: CreateProductRequest): Observable<ApiResponse<ProductDto>> { return id ? this.http.put<ApiResponse<ProductDto>>(`${this.base}/products/${id}`, request) : this.createProduct(request); }
+  superAdminOutlets(): Observable<ApiResponse<OutletDto[]>> { return this.http.get<ApiResponse<OutletDto[]>>(`${this.base}/super-admin/outlets`); }
+  saveOutlet(dto: OutletDto): Observable<ApiResponse<OutletDto>> { return dto.id ? this.http.put<ApiResponse<OutletDto>>(`${this.base}/super-admin/outlets/${dto.id}`, dto) : this.http.post<ApiResponse<OutletDto>>(`${this.base}/super-admin/outlets`, dto); }
+  orderingSettings(id: number): Observable<ApiResponse<any>> { return this.http.get<ApiResponse<any>>(`${this.base}/super-admin/outlets/${id}/ordering`); }
+  configureOrdering(id: number, enabled: boolean, rotateKey = false): Observable<ApiResponse<any>> { return this.http.post<ApiResponse<any>>(`${this.base}/super-admin/outlets/${id}/ordering`, {enabled, rotateKey}); }
+  publicMenu(key: string): Observable<ApiResponse<any>> { return this.http.get<ApiResponse<any>>(`${this.base}/public/outlets/${encodeURIComponent(key)}/menu`); }
+  placeGuestOrder(key: string, body: unknown): Observable<ApiResponse<any>> { return this.http.post<ApiResponse<any>>(`${this.base}/public/outlets/${encodeURIComponent(key)}/orders`, body); }
+  trackGuestOrder(key: string, number: string, proof: string): Observable<ApiResponse<any>> { return this.http.post<ApiResponse<any>>(`${this.base}/public/outlets/${encodeURIComponent(key)}/orders/${encodeURIComponent(number)}/status`, {proof}); }
   changePassword(currentPassword: string, newPassword: string): Observable<ApiResponse<unknown>> {
     return this.http.post<ApiResponse<unknown>>(`${this.base}/auth/password`, {currentPassword, newPassword});
   }

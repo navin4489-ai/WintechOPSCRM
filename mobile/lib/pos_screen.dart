@@ -549,13 +549,28 @@ class _PosScreenState extends State<PosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          backgroundColor: gold.withValues(alpha: .18),
-                          child: Text(
-                            '${p['name']}'.substring(0, 1),
-                            style: const TextStyle(color: navy),
+                        if (api.imageUrl(p['imageUrl']) != null)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              api.imageUrl(p['imageUrl'])!,
+                              height: 76,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const SizedBox(
+                                height: 76,
+                                child: Icon(Icons.image_not_supported_outlined),
+                              ),
+                            ),
+                          )
+                        else
+                          CircleAvatar(
+                            backgroundColor: gold.withValues(alpha: .18),
+                            child: Text(
+                              '${p['name']}'.substring(0, 1),
+                              style: const TextStyle(color: navy),
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 12),
                         Text(
                           '${p['name']}',

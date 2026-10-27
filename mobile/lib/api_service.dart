@@ -24,6 +24,14 @@ class ApiService {
   final FlutterSecureStorage storage;
   String? _token;
   User? _user;
+  int? _activeOutlet;
+  String? _activeOutletName;
+  String? get imageBase => Uri.parse(baseUrl).origin;
+  String? imageUrl(dynamic value) => value is String && value.isNotEmpty
+      ? Uri.parse(baseUrl).resolve(value).toString()
+      : null;
+  String get outletName =>
+      _activeOutletName ?? user?.outletName ?? 'Outlet workspace';
   void Function()? onSessionExpired;
   ApiService({http.Client? client, FlutterSecureStorage? storage})
     : client = client ?? http.Client(),
@@ -32,6 +40,7 @@ class ApiService {
   User? get user => _user;
   bool get isAuthenticated => _token != null && _user != null;
   int get outletId =>
+      _activeOutlet ??
       user?.outletId ??
       (throw const ApiException(
         'Assign this account to an outlet before using POS.',
@@ -64,6 +73,12 @@ class ApiService {
         return;
       }
       _user = User.fromJson(jsonDecode(saved));
+      if (_user?.roleName == 'Owner') {
+        _activeOutlet = int.tryParse(
+          await storage.read(key: 'oro_active_outlet') ?? '',
+        );
+        _activeOutletName = await storage.read(key: 'oro_active_outlet_name');
+      }
     } catch (_) {
       await logout();
     }
@@ -160,8 +175,55 @@ class ApiService {
   Future<void> logout() async {
     _token = null;
     _user = null;
+    _activeOutlet = null;
+    _activeOutletName = null;
+    await storage.delete(key: 'oro_active_outlet');
+    await storage.delete(key: 'oro_active_outlet_name');
     await storage.delete(key: 'oro_token');
     await storage.delete(key: 'oro_user');
+  }
+
+  Future<void> selectOutlet(int id, String name) async {
+    if (user?.roleName != 'Owner') {
+      throw const ApiException('Super Admin access required.');
+    }
+    _activeOutlet = id;
+    _activeOutletName = name;
+    await storage.write(key: 'oro_active_outlet', value: '$id');
+    await storage.write(key: 'oro_active_outlet_name', value: name);
+  }
+
+  Future<void> uploadProductImage(int id, List<int> bytes) async {
+    if (bytes.length > 1024 * 1024) {
+      throw const ApiException('Choose an image up to 1 MB.');
+    }
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$baseUrl/products/$id/image'))
+          ..headers['Authorization'] = 'Bearer $_token'
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: 'product-image',
+            ),
+          );
+    final response = await http.Response.fromStream(
+      await client.send(request).timeout(const Duration(seconds: 65)),
+    );
+    if (response.statusCode == 401) {
+      await logout();
+      onSessionExpired?.call();
+      throw const ApiException('Session expired. Please sign in.');
+    }
+    if (response.statusCode != 200) {
+      Map<String, dynamic>? body;
+      try {
+        body = jsonDecode(response.body);
+      } catch (_) {}
+      throw ApiException(
+        (body?['errors'] as List?)?.join('\n') ?? 'Image upload failed.',
+      );
+    }
   }
 
   Future<List<Product>> getProducts(int outletId) async => ((await request(

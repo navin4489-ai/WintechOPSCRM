@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import 'dart:convert';
+
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
@@ -350,6 +353,44 @@ Future<void> printSales(List<dynamic> rows) async {
   );
   await Printing.layoutPdf(
     name: 'ORO-sales-INR',
+    onLayout: (_) async => doc.save(),
+  );
+}
+
+Future<void> printOutletQr(String name, String pngBase64, String url) async {
+  final doc = pw.Document();
+  doc.addPage(
+    pw.Page(
+      build: (_) => pw.Center(
+        child: pw.Column(
+          mainAxisSize: pw.MainAxisSize.min,
+          children: [
+            pw.Text(
+              name,
+              style: pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 24),
+            pw.Image(
+              pw.MemoryImage(base64Decode(pngBase64)),
+              width: 270,
+              height: 270,
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text(
+              'Scan to order - Pay cash at the outlet',
+              style: const pw.TextStyle(fontSize: 18),
+            ),
+            pw.SizedBox(height: 12),
+            pw.Text(url, style: const pw.TextStyle(fontSize: 9)),
+            pw.SizedBox(height: 24),
+            pw.Text('Powered by ORO POS'),
+          ],
+        ),
+      ),
+    ),
+  );
+  await Printing.layoutPdf(
+    name: 'ORO-outlet-QR',
     onLayout: (_) async => doc.save(),
   );
 }

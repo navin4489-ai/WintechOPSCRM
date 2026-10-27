@@ -309,6 +309,8 @@ class _OperationsHomeState extends State<OperationsHome> {
     ('Shifts', Icons.schedule),
     ('Tables', Icons.table_restaurant_outlined),
     ('Catalogue', Icons.restaurant_menu),
+    if (widget.api.user?.roleName == 'Owner')
+      ('Super Admin', Icons.admin_panel_settings_outlined),
     if (widget.api.can('ManageInventory'))
       ('Inventory', Icons.inventory_2_outlined),
     if (widget.api.can('ViewReports')) ...[
@@ -420,10 +422,7 @@ class _OperationsHomeState extends State<OperationsHome> {
                 current,
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              Text(
-                widget.api.user?.outletName ?? 'Outlet workspace',
-                style: const TextStyle(fontSize: 12),
-              ),
+              Text(widget.api.outletName, style: const TextStyle(fontSize: 12)),
             ],
           ),
           actions: [

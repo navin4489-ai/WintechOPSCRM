@@ -31,3 +31,4 @@
 .cat-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-500); flex-shrink: 0; }
 
 @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+.prod-image{width:64px;height:64px;object-fit:cover;border-radius:12px}.item-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.upload{position:relative;display:inline-block;background:var(--info-soft);padding:10px 12px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:600}.upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}.item-overlay{position:fixed;inset:0;background:#08122b99;z-index:300;display:grid;place-items:center;padding:20px}.item-dialog{background:white;border-radius:20px;padding:24px;width:min(520px,100%);max-height:90vh;overflow:auto}.item-dialog label{display:block;margin:12px 0}

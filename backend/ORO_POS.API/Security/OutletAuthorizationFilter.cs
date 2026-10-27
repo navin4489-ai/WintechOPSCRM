@@ -13,6 +13,7 @@ public sealed class OutletAuthorizationFilter(AppDbContext db) : IAsyncActionFil
 {
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
+        if (context.ActionDescriptor.EndpointMetadata.OfType<Microsoft.AspNetCore.Authorization.IAllowAnonymous>().Any()) { await next(); return; }
         if (context.RouteData.Values["controller"]?.ToString() == "Auth" && context.RouteData.Values["action"]?.ToString() == "Login")
         { await next(); return; }
         if (context.HttpContext.User.Identity?.IsAuthenticated != true) { await next(); return; }
@@ -24,6 +25,7 @@ public sealed class OutletAuthorizationFilter(AppDbContext db) : IAsyncActionFil
         { context.Result = new UnauthorizedResult(); return; }
         var owner = user.Role.Name == "Owner";
         var controller = context.RouteData.Values["controller"]?.ToString() ?? "";
+        if (controller == "SuperAdmin" && !owner) { context.Result = new ForbidResult(); return; }
         var action = context.RouteData.Values["action"]?.ToString() ?? "";
         var write = !HttpMethods.IsGet(context.HttpContext.Request.Method);
         string? permission = controller switch
@@ -98,7 +100,7 @@ public sealed class OutletAuthorizationFilter(AppDbContext db) : IAsyncActionFil
         // Recipes without a product filter and global role/outlet administration
         // expose multi-outlet configuration and are restricted to the owner.
         if ((controller == "Recipes" && !write && (!context.ActionArguments.TryGetValue("productId", out var productFilter) || productFilter == null))
-            || (controller == "Outlets" && (write || !context.ActionArguments.ContainsKey("id"))))
+            || (controller == "Outlets" && write))
         { context.Result = new ForbidResult(); return; }
         await next();
     }

@@ -116,6 +116,8 @@ builder.Services.AddRateLimiter(options => {
     options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("public-read", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("public-order", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 
 // Services
@@ -130,6 +132,8 @@ builder.Services.AddScoped<IOutletService, OutletService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<PermissionSeedService>();
+builder.Services.AddScoped<PublicOrderingService>();
+builder.Services.AddScoped<ProductImageService>();
 
 // CORS - allow Angular dev and production
 builder.Services.AddCors(options =>

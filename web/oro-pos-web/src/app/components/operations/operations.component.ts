@@ -24,6 +24,9 @@ export class OperationsComponent implements OnInit {
   restock = false;
   approverUsername = '';
   approverPassword = '';
+  cashReceived = 0;
+  get balance() { return this.selected ? Math.max(0, Math.round((this.selected.totalAmount - this.selected.payments.filter(p=>p.status==='Captured').reduce((s,p)=>s+p.amount,0))*100)/100) : 0; }
+  collectCash() {if(!this.selected||this.busy)return;if(!Number.isFinite(this.cashReceived)||this.cashReceived<this.balance){this.toast.warning('Enter cash received covering the outstanding balance.');return;}const change=this.cashReceived-this.balance;this.busy=true;this.api.processPayment(this.selected.id,{orderId:this.selected.id,tenderType:'Cash',amount:this.balance}).subscribe({next:r=>{this.busy=false;this.selected=r.data||null;this.toast.success(`Cash collected. Change due ${new InrPipe().transform(change)}.`);this.load();},error:e=>this.fail(e)});}
   constructor(private api: ApiService, private auth: AuthService, private route: ActivatedRoute, private toast: ToastService) {}
   ngOnInit() { this.route.data.subscribe(data => { this.audit = data['audit'] === true; this.page = 1; this.load(); }); }
   can(permission: string) { const user = this.auth.getCurrentUser(); return user?.roleName === 'Owner' || !!user?.permissions?.includes(permission); }

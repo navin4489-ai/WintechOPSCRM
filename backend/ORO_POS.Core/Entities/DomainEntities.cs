@@ -100,6 +100,15 @@ public class ModifierGroup : BaseEntity
     public virtual ICollection<ProductModifierGroup> ProductModifierGroups { get; set; } = new List<ProductModifierGroup>();
 }
 
+public class ProductImage : BaseEntity
+{
+    public int ProductId { get; set; }
+    public string ContentType { get; set; } = "image/png";
+    public byte[] Data { get; set; } = Array.Empty<byte>();
+    public string Hash { get; set; } = "";
+    public virtual Product Product { get; set; } = null!;
+}
+
 public class ModifierOption : BaseEntity
 {
     public int ModifierGroupId { get; set; }

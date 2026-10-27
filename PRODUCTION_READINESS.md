@@ -3,7 +3,7 @@
 ## Verified in this pass
 
 - API and Angular production builds succeed.
-- 29 backend tests pass in Release, including checkout/accounting regression tests in
+- 37 backend tests pass in Release, including checkout/accounting regression tests in
   `backend/ORO_POS.Tests/CheckoutTests.cs`.
 - Checkout persists the platform's existing 5% GST policy, rounded to paise.
 - Discounts update persisted GST/total; sales reports do not deduct discounts twice.
@@ -35,6 +35,14 @@ integration, hardware printing, security isolation, or load capacity.
 
 - Native Android 1.1.0 replaces the prototype with role-aware operations screens;
   7 Flutter/widget tests pass and `flutter analyze` reports no issues.
+- Android 1.2.0 adds Super Admin outlet configuration and QR poster printing,
+  working-outlet switching and gallery-based item image uploads.
+- Public, no-login QR ordering supports server-priced carts, retry-safe request IDs,
+  private order-status proofs and cash-at-outlet collection by authenticated staff.
+  Links can be disabled or rotated. Closed outlets or missing shifts reject new orders.
+- Product photos use a dedicated PostgreSQL `ProductImages` table and additive EF
+  migration. The API accepts PNG/JPEG/WebP up to 1 MB, checks file signatures and
+  outlet permissions, audits changes and serves versioned cacheable image URLs.
 - New gold/navy ORO branding and owner-approved private release signing, HTTPS-only
   Android networking, encrypted credential storage and no default-filled login.
 - API actions re-read the account's active status, permissions and outlet assignment.
@@ -73,7 +81,7 @@ integration, hardware printing, security isolation, or load capacity.
 - Complete end-to-end acceptance of the new refund, receipt, audit viewer, table
   operation and export flows. The original implementation checklist overstates
   coverage: supplier/PO modules, attendance scheduling/corrections, configurable
-  service charges, public QR ordering, peripheral management and offline replay
+  service charges, peripheral management and offline replay
   are not delivered as complete modules.
 - Card/UPI are recorded tender types, not confirmed gateway/bank transactions.
   Configure an actual provider and webhook reconciliation if online capture is required.

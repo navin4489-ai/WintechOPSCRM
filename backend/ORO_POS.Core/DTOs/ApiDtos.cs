@@ -229,6 +229,7 @@ public class OrderItemRequest
 
 public class CreateOrderRequest
 {
+    public Guid? ClientRequestId { get; set; }
     public int OutletId { get; set; }
     public int? TableId { get; set; }
     public string ServiceType { get; set; } = "DineIn";

@@ -25,10 +25,20 @@ public class OrderService : IOrderService
     {
         await using var tx = _db.Database.IsRelational()
             ? await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable) : null;
-        var user = await _db.Users.Include(u => u.Outlet).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
+        var user = await _db.Users.Include(u => u.Outlet).Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
         if (user == null) throw new UnauthorizedAccessException("User not found or inactive.");
         if (request.OutletId != user.OutletId && user.Role?.Name != "Owner")
             throw new UnauthorizedAccessException("Cannot create order for another outlet.");
+
+        if (request.ClientRequestId.HasValue)
+        {
+            var existing = await _db.Orders.FirstOrDefaultAsync(o => o.OrderNumber == $"WEB-{request.ClientRequestId.Value:N}");
+            if (existing != null)
+            {
+                if (existing.UserId != userId || existing.OutletId != request.OutletId) throw new UnauthorizedAccessException("Request key is already in use.");
+                return (await GetOrderByIdAsync(existing.Id, userId))!;
+            }
+        }
 
         var shift = await _db.Shifts.FirstOrDefaultAsync(s => s.UserId == userId && s.OutletId == request.OutletId && s.Status == ShiftStatus.Open.ToString());
         if (shift == null) throw new InvalidOperationException("No open shift for this user. Open a shift first.");
@@ -41,7 +51,7 @@ public class OrderService : IOrderService
                 throw new InvalidOperationException("This table already has an open order. Refresh and open the existing order.");
         }
 
-        var orderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..12].ToUpperInvariant()}";
+        var orderNumber = request.ClientRequestId.HasValue ? $"WEB-{request.ClientRequestId.Value:N}" : $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..12].ToUpperInvariant()}";
 
         var order = new Order
         {
@@ -344,6 +354,10 @@ public class OrderService : IOrderService
 
         await RecalculateOrderTotalsAsync(orderId);
         var totalPaid = order.Payments.Where(p => p.Status == "Captured").Sum(p => p.Amount);
+        var cashierShift = await _db.Shifts.FirstOrDefaultAsync(s => s.UserId == userId && s.OutletId == order.OutletId && s.Status == "Open")
+            ?? throw new InvalidOperationException("Open your cash shift before collecting payment.");
+        if (order.Payments.Count == 0) order.ShiftId = cashierShift.Id;
+        else if (order.ShiftId != cashierShift.Id) throw new InvalidOperationException("This partially paid bill must be settled in its original cash shift.");
         var balance = order.TotalAmount - totalPaid;
         if (request.Amount == 0 && order.TotalAmount > 0) throw new InvalidOperationException("Payment must be positive for a non-zero bill.");
         if (balance <= 0 && !(order.TotalAmount == 0 && order.Payments.Count == 0)) throw new InvalidOperationException("Order has no remaining balance.");

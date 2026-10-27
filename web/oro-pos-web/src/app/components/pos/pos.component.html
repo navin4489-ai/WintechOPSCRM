@@ -82,7 +82,7 @@
       </div>
       <div class="product-grid">
         <div class="product-card" *ngFor="let p of filteredProducts" (click)="addItem(p)">
-          <div class="product-initial">{{ p.name.charAt(0) }}</div>
+          @if(p.imageUrl){<img class="product-photo" [src]="p.imageUrl" [alt]="p.name" loading="lazy"/>}@else{<div class="product-initial">{{ p.name.charAt(0) }}</div>}
           <div class="product-name">{{ p.name }}</div>
           <div class="product-sku">{{ p.sku }}</div>
           <div class="product-price">{{ p.price | inr }}</div>

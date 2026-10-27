@@ -1,4 +1,4 @@
-# ORO POS Android 1.1.0
+# ORO POS Android 1.2.0
 
 Native Flutter workspace with the gold/navy ORO mark. Uses the same API and INR
 accounting as the web app, not an embedded web page.
@@ -18,14 +18,19 @@ accounting as the web app, not an embedded web page.
 - Open/close cash shifts, opening float, counted cash, variance and Z-report viewing.
 - Stock, ledger, receipts/waste/signed adjustments/physical counts, recipe mapping.
 - Catalogue/category/table creation, staff create/edit/deactivation, audit history.
+- Owner/Super Admin outlet configuration, working-outlet selection, public QR ordering
+  enable/disable, link copy and QR poster printing.
+- Item image upload/replacement from the Android gallery. Images are stored in
+  PostgreSQL and displayed on POS, catalogue and the public QR menu.
 - Filtered sales reports and Android print/PDF report output.
 
 Card/UPI payments and refunds are collected/returned **externally**, as selected by
 the owner. Recording a transaction here never calls a bank or a merchant gateway.
 
 The earlier prototype customer QR/order-status placeholders and unauthenticated
-waiter/KDS screens have been replaced. Public self-service QR ordering, purchase
-orders/suppliers, staff scheduling/attendance correction, service charges, printer
+waiter/KDS screens have been replaced. Customers scan the outlet QR and order in
+their mobile browser without installing the staff app or signing in. Cash is
+collected later by signed-in staff. Purchase orders/suppliers, staff scheduling/attendance correction, service charges, printer
 device management and fully automated offline replay are not implemented modules.
 See `../PRODUCTION_READINESS.md` for release acceptance work.
 

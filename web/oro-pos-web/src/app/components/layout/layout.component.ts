@@ -41,12 +41,13 @@ export class LayoutComponent {
     { path: '/shifts', label: 'Shifts', icon: 'shifts' },
     { path: '/staff', label: 'Staff', icon: 'staff' },
     { path: '/audit', label: 'Audit Log', icon: 'reports' },
+    { path: '/super-admin', label: 'Super Admin · Outlets', icon: 'tables' },
   ];
 
   constructor(private authService: AuthService, private router: Router, private api: ApiService, private toast: ToastService) {
     this.user = this.authService.getCurrentUser();
     const required: Record<string, string> = {'/dashboard':'ViewReports', '/pos':'CreateOrder', '/inventory':'ManageInventory', '/reports':'ViewReports', '/staff':'ManageUsers', '/audit':'ViewReports'};
-    this.nav = this.nav.filter(item => this.user?.roleName === 'Owner' || !required[item.path] || this.user?.permissions?.includes(required[item.path]));
+    this.nav = this.nav.filter(item => item.path === '/super-admin' ? this.user?.roleName === 'Owner' : this.user?.roleName === 'Owner' || !required[item.path] || this.user?.permissions?.includes(required[item.path]));
   }
   changePassword() {
     if (this.changing) return;

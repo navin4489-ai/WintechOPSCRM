@@ -14,7 +14,8 @@ public class OutletService : IOutletService
 
     public async Task<List<OutletDto>> GetOutletsAsync(int userId)
     {
-        var outlets = await _db.Outlets.Where(o => !o.IsDeleted).ToListAsync();
+        var actor = await _db.Users.Include(u=>u.Role).FirstOrDefaultAsync(u=>u.Id==userId&&u.IsActive) ?? throw new UnauthorizedAccessException("User not found.");
+        var outlets = await _db.Outlets.Where(o => !o.IsDeleted && (actor.Role!.Name=="Owner" || o.Id==actor.OutletId)).ToListAsync();
         return outlets.Select(o => new OutletDto
         {
             Id = o.Id, Name = o.Name, Address = o.Address, Phone = o.Phone,
@@ -34,6 +35,8 @@ public class OutletService : IOutletService
 
     public async Task<OutletDto> CreateOutletAsync(OutletDto dto, int userId)
     {
+        ValidateOutlet(dto);
+        if (await _db.Outlets.AnyAsync(o => o.Name == dto.Name)) throw new InvalidOperationException("Outlet name already exists.");
         var outlet = new Outlet
         {
             Name = dto.Name, Address = dto.Address, Phone = dto.Phone,
@@ -43,18 +46,31 @@ public class OutletService : IOutletService
         _db.Outlets.Add(outlet);
         await _db.SaveChangesAsync();
         dto.Id = outlet.Id;
+        _db.AuditLogs.Add(new AuditLog { ActorId = userId, Action = "CreateOutlet", Entity = "Outlet", EntityId = outlet.Id, Reason = "Super admin outlet configuration." });
+        await _db.SaveChangesAsync();
         return dto;
     }
 
     public async Task<OutletDto> UpdateOutletAsync(int id, OutletDto dto, int userId)
     {
+        ValidateOutlet(dto);
         var outlet = await _db.Outlets.FindAsync(id);
         if (outlet == null) throw new KeyNotFoundException("Outlet not found.");
         outlet.Name = dto.Name; outlet.Address = dto.Address; outlet.Phone = dto.Phone;
         outlet.Timezone = dto.Timezone; outlet.TaxSetup = dto.TaxSetup; outlet.Currency = dto.Currency;
         outlet.IsOperating = dto.IsOperating; outlet.UpdatedAt = DateTime.UtcNow;
+        dto.Id = id;
+        _db.AuditLogs.Add(new AuditLog { ActorId = userId, Action = "UpdateOutlet", Entity = "Outlet", EntityId = id, Reason = "Super admin outlet configuration." });
         await _db.SaveChangesAsync();
         return dto;
+    }
+    private static void ValidateOutlet(OutletDto dto)
+    {
+        dto.Name = dto.Name.Trim();
+        if (dto.Name.Length == 0 || dto.Name.Length > 120 || (dto.Address?.Length ?? 0) > 500 || (dto.Phone?.Length ?? 0) > 40)
+            throw new InvalidOperationException("Enter a valid outlet name, address and phone.");
+        if (dto.Currency != "INR") throw new InvalidOperationException("This POS deployment uses INR.");
+        try { TimeZoneInfo.FindSystemTimeZoneById(dto.Timezone); } catch { throw new InvalidOperationException("Enter a valid timezone, for example Asia/Kolkata."); }
     }
 }
 
@@ -121,6 +137,22 @@ public class MenuService : IMenuService
         await _db.SaveChangesAsync();
 
         return await GetProductDtoAsync(product.Id);
+    }
+
+    public async Task<ProductDto> UpdateProductAsync(int productId, CreateProductRequest request, int userId)
+    {
+        var product = await _db.Products.FindAsync(productId) ?? throw new KeyNotFoundException("Product not found.");
+        if (request.OutletId != product.OutletId || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.SKU) || request.Price < 0)
+            throw new InvalidOperationException("Keep the assigned outlet and enter a name, SKU and non-negative price.");
+        if (await _db.Products.AnyAsync(p => p.OutletId == product.OutletId && p.Id != productId && p.SKU == request.SKU)) throw new InvalidOperationException("SKU already exists.");
+        if (request.CategoryId.HasValue && !await _db.Categories.AnyAsync(c => c.Id == request.CategoryId && c.OutletId == product.OutletId)) throw new InvalidOperationException("Category must belong to this outlet.");
+        product.Name = request.Name.Trim(); product.SKU = request.SKU.Trim(); product.Description = request.Description; product.Price = request.Price;
+        product.Barcode = request.Barcode; product.CategoryId = request.CategoryId; product.IsAvailable = request.IsAvailable; product.SortOrder = request.SortOrder;
+        product.UpdatedAt = DateTime.UtcNow;
+        dbAudit();
+        await _db.SaveChangesAsync();
+        return await GetProductDtoAsync(productId);
+        void dbAudit() => _db.AuditLogs.Add(new AuditLog { ActorId = userId, Action = "UpdateProduct", Entity = "Product", EntityId = productId, Reason = "Outlet administrator updated item details, price or availability." });
     }
 
     public async Task<List<ModifierGroupDto>> GetModifierGroupsAsync(int outletId, int userId)
