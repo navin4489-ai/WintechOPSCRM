@@ -1,0 +1,85 @@
+<div class="page">
+  <div class="header">
+    <h1>Staff Management</h1>
+    <button class="primary" (click)="newStaff()">+ Add Staff</button>
+  </div>
+
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Outlet</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let u of users" [class.inactive]="!u.isActive">
+          <td>{{u.username}}</td>
+          <td>{{u.email}}</td>
+          <td><span class="badge role">{{u.roleName || '—'}}</span></td>
+          <td>{{u.outletName || 'All outlets'}}</td>
+          <td>
+            <span class="badge" [class.ok]="u.isActive" [class.bad]="!u.isActive">
+              {{u.isActive ? 'Active' : 'Inactive'}}
+            </span>
+          </td>
+          <td class="actions">
+            <button class="link" (click)="edit(u)">Edit</button>
+            <button class="link danger" (click)="remove(u)">Remove</button>
+          </td>
+        </tr>
+        <tr *ngIf="!users.length">
+          <td colspan="6" class="empty">No staff accounts yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel" *ngIf="editing">
+    <h3>{{ form.id ? 'Edit Staff Account' : 'New Staff Account' }}</h3>
+
+    <div class="error" *ngIf="error">{{error}}</div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" [(ngModel)]="form.username" placeholder="e.g. waiter1" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" [(ngModel)]="form.email" placeholder="name@outlet.com" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" [(ngModel)]="form.password"
+               [placeholder]="form.id ? '(leave blank to keep current)' : 'Min 6 characters'" />
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select [(ngModel)]="form.roleId">
+          <option [ngValue]="undefined">— none —</option>
+          <option *ngFor="let r of roles" [ngValue]="r.id">{{r.name}}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Outlet Scope</label>
+        <select [(ngModel)]="form.outletId">
+          <option [ngValue]="undefined">— none (all outlets) —</option>
+          <option *ngFor="let o of outlets" [ngValue]="o.id">{{o.name}}</option>
+        </select>
+      </div>
+      <div class="form-group checkbox" *ngIf="form.id">
+        <label><input type="checkbox" [(ngModel)]="form.isActive" /> Active (can sign in)</label>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="primary" (click)="save()" [disabled]="saving">{{saving ? 'Saving…' : 'Save'}}</button>
+      <button class="secondary" (click)="cancel()">Cancel</button>
+    </div>
+  </div>
+</div>

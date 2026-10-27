@@ -12,7 +12,8 @@ import {
   ProductStockDto, RecordInventoryRequest, InventoryLedgerDto,
   RecipeDto, CreateRecipeRequest,
   ShiftDto, OpenShiftRequest, CloseShiftRequest, ZReportDto,
-  DashboardSummaryDto, SalesReportRequest, SalesReportDto, AuditLogDto
+  DashboardSummaryDto, SalesReportRequest, SalesReportDto, AuditLogDto,
+  UserDto, RoleDto, CreateUserRequest, UpdateUserRequest
 } from '../models';
 
 @Injectable({
@@ -191,5 +192,22 @@ export class ApiService {
     let url = `${this.base}/reports/audit?page=${page}&pageSize=${pageSize}`;
     if (outletId) url += `&outletId=${outletId}`;
     return this.http.get<ApiResponse<AuditLogDto[]>>(url);
+  }
+
+  // Staff management (HR-001)
+  getUsers(): Observable<ApiResponse<UserDto[]>> {
+    return this.http.get<ApiResponse<UserDto[]>>(`${this.base}/users`);
+  }
+  createUser(req: CreateUserRequest): Observable<ApiResponse<UserDto>> {
+    return this.http.post<ApiResponse<UserDto>>(`${this.base}/users`, req);
+  }
+  updateUser(id: number, req: UpdateUserRequest): Observable<ApiResponse<UserDto>> {
+    return this.http.put<ApiResponse<UserDto>>(`${this.base}/users/${id}`, req);
+  }
+  deleteUser(id: number): Observable<ApiResponse<UserDto>> {
+    return this.http.delete<ApiResponse<UserDto>>(`${this.base}/users/${id}`);
+  }
+  getRoles(): Observable<ApiResponse<RoleDto[]>> {
+    return this.http.get<ApiResponse<RoleDto[]>>(`${this.base}/roles`);
   }
 }

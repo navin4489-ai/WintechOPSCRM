@@ -7,6 +7,7 @@ import { TablesComponent } from './components/tables/tables.component';
 import { ReportsComponent } from './components/reports/reports.component';
 import { InventoryComponent } from './components/inventory/inventory.component';
 import { MenuComponent } from './components/menu/menu.component';
+import { StaffComponent } from './components/staff/staff.component';
 import { AuthGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
@@ -19,5 +20,6 @@ export const routes: Routes = [
   { path: 'inventory', component: InventoryComponent, canActivate: [AuthGuard] },
   { path: 'menu', component: MenuComponent, canActivate: [AuthGuard] },
   { path: 'reports', component: ReportsComponent, canActivate: [AuthGuard] },
+  { path: 'staff', component: StaffComponent, canActivate: [AuthGuard] },
   { path: '**', redirectTo: '/dashboard' }
 ];

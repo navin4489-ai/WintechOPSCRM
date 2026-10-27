@@ -17,6 +17,13 @@ export interface UserDto {
   isActive: boolean;
 }
 
+export interface RoleDto {
+  id: number;
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
 export interface LoginRequest {
   username: string;
   password: string;

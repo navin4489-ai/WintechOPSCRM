@@ -57,3 +57,22 @@ export interface CreateZoneRequest {
   name: string;
   floorPlanData?: string;
 }
+
+// Staff management (HR-001)
+export interface CreateUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  roleId?: number;
+  outletId?: number;
+}
+
+export interface UpdateUserRequest {
+  username: string;
+  email: string;
+  /** Omit or leave empty to keep the current password. */
+  password?: string;
+  roleId?: number;
+  outletId?: number;
+  isActive: boolean;
+}
