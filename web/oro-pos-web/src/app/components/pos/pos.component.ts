@@ -69,6 +69,16 @@ export class PosComponent implements OnInit {
     return Math.max(0, this.amountReceived - this.total);
   }
 
+  /** Live preview of the discounted total (subtotal - discount + GST on the net). */
+  get previewTotal(): number {
+    const val = Number(this.discountValue ?? 0);
+    const disc = this.discountMode === 'percent'
+      ? this.subtotal * Math.min(100, Math.max(0, val)) / 100
+      : Math.min(this.subtotal, Math.max(0, val));
+    const net = this.subtotal - disc;
+    return net + net * this.taxRate;
+  }
+
   selectTable(t: TableDto) {
     this.selectedTableId = t.id;
     if (!t.hasOpenOrder) {

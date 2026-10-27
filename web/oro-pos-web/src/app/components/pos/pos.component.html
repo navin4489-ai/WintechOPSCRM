@@ -162,7 +162,7 @@
 
       <div class="change-row">
         <span>New total after discount + GST</span>
-        <strong>{{ (subtotal - (discountValue || 0)) + ((subtotal - (discountValue || 0)) * taxRate) | inr }}</strong>
+        <strong>{{ previewTotal | inr }}</strong>
       </div>
     </div>
 
