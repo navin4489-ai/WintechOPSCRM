@@ -6,22 +6,36 @@ using ORO_POS.Core.Interfaces;
 
 namespace ORO_POS.API.Controllers;
 
+/// <summary>
+/// Staff account management (BRD HR-001): list, create, edit and deactivate
+/// users, assigning each a role and outlet scope. Every action requires the
+/// ManageUsers permission and is audit-logged server-side.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
 public class UsersController : ControllerBase
 {
+    private readonly IUserService _users;
     private readonly IAuthService _auth;
-    private readonly IMenuService _menu;
 
-    public UsersController(IAuthService auth, IMenuService menu) { _auth = auth; _menu = menu; }
+    public UsersController(IUserService users, IAuthService auth)
+    {
+        _users = users;
+        _auth = auth;
+    }
 
+    /// <summary>List staff accounts visible to the caller (outlet-scoped for non-owners).</summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
+        => Ok(new ApiResponse<List<UserDto>> { Success = true, Data = await _users.GetUsersAsync(GetUserId()) });
+
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
     {
-        var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageUsers);
-        if (!can) return Forbid();
-        return Ok(new ApiResponse<object> { Success = true, Data = new { message = "Users endpoint - use Outlets for outlet-scoped user management" } });
+        var user = await _users.GetUserByIdAsync(id, GetUserId());
+        if (user == null) return NotFound(new ApiResponse<object> { Success = false, Errors = new[] { $"User {id} not found." } });
+        return Ok(new ApiResponse<UserDto> { Success = true, Data = user });
     }
 
     [HttpGet("me")]
@@ -32,6 +46,21 @@ public class UsersController : ControllerBase
         return Ok(new ApiResponse<object> { Success = true, Data = new { userId, canManageSettings = canManage } });
     }
 
+    /// <summary>Create a staff account with role and outlet assignment.</summary>
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
+        => Ok(new ApiResponse<UserDto> { Success = true, Data = await _users.CreateUserAsync(request, GetUserId()) });
+
+    /// <summary>Update an account's details, role, outlet scope, status or password.</summary>
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request)
+        => Ok(new ApiResponse<UserDto> { Success = true, Data = await _users.UpdateUserAsync(id, request, GetUserId()) });
+
+    /// <summary>Deactivate and soft-delete a staff account.</summary>
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+        => Ok(new ApiResponse<UserDto> { Success = true, Data = await _users.DeleteUserAsync(id, GetUserId()) });
+
     private int GetUserId() => int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
 }
 
@@ -40,9 +69,10 @@ public class UsersController : ControllerBase
 [Authorize]
 public class RolesController : ControllerBase
 {
-    private readonly IAuthService _auth;
-
-    public RolesController(IAuthService auth) => _auth = auth;
+    /// <summary>List assignable roles with their permission sets (for the staff form).</summary>
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromServices] IUserService users)
+        => Ok(new ApiResponse<List<RoleDto>> { Success = true, Data = await users.GetRolesAsync() });
 
     [HttpGet("permissions")]
     public IActionResult GetPermissions()

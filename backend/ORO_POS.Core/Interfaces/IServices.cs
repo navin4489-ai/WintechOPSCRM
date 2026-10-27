@@ -10,6 +10,16 @@ public interface IAuthService
     Task<bool> ValidateOutletAccessAsync(int userId, int outletId);
 }
 
+public interface IUserService
+{
+    Task<List<UserDto>> GetUsersAsync(int actorId);
+    Task<UserDto?> GetUserByIdAsync(int id, int actorId);
+    Task<UserDto> CreateUserAsync(CreateUserRequest request, int actorId);
+    Task<UserDto> UpdateUserAsync(int id, UpdateUserRequest request, int actorId);
+    Task<UserDto> DeleteUserAsync(int id, int actorId);
+    Task<List<RoleDto>> GetRolesAsync();
+}
+
 public interface IOrderService
 {
     Task<OrderDto> CreateOrderAsync(CreateOrderRequest request, int userId);

@@ -65,6 +65,17 @@ public class CreateUserRequest
     public int? OutletId { get; set; }
 }
 
+public class UpdateUserRequest
+{
+    public string Username { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    /// <summary>Null/empty keeps the current password.</summary>
+    public string? Password { get; set; }
+    public int? RoleId { get; set; }
+    public int? OutletId { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
 public class RoleDto
 {
     public int Id { get; set; }
