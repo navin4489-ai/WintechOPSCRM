@@ -84,11 +84,24 @@ export class PosComponent implements OnInit {
     if (!t.hasOpenOrder) {
       this.createOrderForTable(t.id);
     } else {
-      // load existing open order items
-      this.api.getOrders(1, 50, this.user?.outletId).subscribe((res: ApiResponse<any>) => {
-        const list = res.data?.items || res.data || [];
-        const open = (list as any[]).find((o: any) => o.tableId === t.id && o.status !== 'Closed' && o.status !== 'Void');
-        if (open) { this.currentOrder = open; this.orderItems = open.orderItems || []; this.calculateTotals(); }
+      // Load the full order (with its items) for this table. The list endpoint
+      // omits orderItems, so we resolve the order id then fetch it by id.
+      this.api.getOrders(1, 50, this.user?.outletId).subscribe({
+        next: (res: ApiResponse<any>) => {
+          const list = res.data?.items || res.data || [];
+          const open = (list as any[]).find((o: any) => o.tableId === t.id && o.status !== 'Closed' && o.status !== 'Void');
+          if (!open) return;
+          this.api.getOrderById(open.id).subscribe({
+            next: (detail) => {
+              if (detail.success && detail.data) {
+                this.currentOrder = detail.data as OrderDto;
+                this.orderItems = detail.data.orderItems || [];
+                this.calculateTotals();
+              }
+            },
+            error: () => { this.currentOrder = open; this.orderItems = open.orderItems || []; this.calculateTotals(); }
+          });
+        }
       });
     }
   }

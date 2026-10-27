@@ -94,6 +94,9 @@ export class ApiService {
     if (search) url += `&search=${search}`;
     return this.http.get<ApiResponse<PagedResult<OrderDto>>>(url);
   }
+  getOrderById(orderId: number): Observable<ApiResponse<OrderDto>> {
+    return this.http.get<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}`);
+  }
   updateOrderStatus(orderId: number, status: string, reason?: string): Observable<ApiResponse<OrderDto>> {
     let url = `${this.base}/orders/${orderId}/status?status=${status}`;
     if (reason) url += `&reason=${reason}`;
