@@ -1,0 +1,51 @@
+<div class="pos">
+  <div class="header">
+    <h1>Point of Sale</h1>
+    <div class="user-info">{{user?.username}} - {{outlet?.name}}</div>
+  </div>
+
+  <div class="body">
+    <div class="panel tables-panel">
+      <h3>Tables</h3>
+      <div class="table-grid">
+        <div class="table-tile" *ngFor="let t of tables" [class.occupied]="t.status === 'Occupied'" [class.free]="t.status === 'Free'" [class.selected]="t.status === 'Selected'" (click)="selectTable(t)">
+          <div class="table-number">{{t.tableNumber}}</div>
+          <div class="table-status">{{t.status}}</div>
+          <div class="table-capacity">{{t.capacity}} seats</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel order-panel">
+      <h3>Order: {{currentOrder?.orderNumber || 'New'}}</h3>
+      <div class="order-items">
+        <div class="order-item" *ngFor="let item of orderItems; let i = index">
+          <span>{{item.productName}} x{{item.quantity}}</span>
+          <span>${{item.lineTotal | number:'1.2'}}</span>
+          <button (click)="removeItem(i)">×</button>
+        </div>
+        <div *ngIf="orderItems.length === 0" class="empty">No items</div>
+      </div>
+      <div class="order-totals">
+        <div>Subtotal: ${{subtotal | number:'1.2'}}</div>
+        <div>Tax: ${{tax | number:'1.2'}}</div>
+        <div class="total">Total: ${{total | number:'1.2'}}</div>
+      </div>
+      <div class="payment-actions">
+        <button (click)="openPaymentModal()" class="btn-primary">Process Payment</button>
+        <button (click)="voidOrder()" class="btn-danger">Void Order</button>
+      </div>
+    </div>
+
+    <div class="panel menu-panel">
+      <h3>Menu</h3>
+      <div class="product-grid">
+        <div class="product-card" *ngFor="let p of products" (click)="addItem(p)">
+          <div class="product-name">{{p.name}}</div>
+          <div class="product-price">${{p.price | number:'1.2'}}</div>
+          <div class="product-sku">{{p.sku}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

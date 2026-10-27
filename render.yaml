@@ -1,0 +1,35 @@
+# Render Blueprint — ORO POS Platform
+# Provisions the API+SPA web service and a fresh PostgreSQL database.
+#
+# IMPORTANT: RESET_DB_ON_START is "true" so this first deploy wipes all data
+# and reseeds (roles, main outlet, admin user). After you have verified the
+# app works, change it to "false" or every subsequent deploy will wipe data.
+
+services:
+  - type: web
+    name: the-bathany
+    runtime: docker
+    region: oregon
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: the-bathany-db
+          property: connectionString
+      - key: Jwt__Key
+        generateValue: true
+      - key: RESET_DB_ON_START
+        value: "true"
+
+databases:
+  - name: the-bathany-db
+    databaseName: oro_pos
+    plan: free
+    postgresMajorVersion: "17"

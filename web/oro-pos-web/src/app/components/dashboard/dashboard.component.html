@@ -1,0 +1,22 @@
+<div class="dashboard">
+  <h1>Dashboard</h1>
+  <div class="summary-grid">
+    <div class="card"><div class="label">Today Sales</div><div class="value">${{ summary?.todaySales | number:'1.2' }}</div></div>
+    <div class="card"><div class="label">Today Orders</div><div class="value">{{ summary?.todayOrders }}</div></div>
+    <div class="card"><div class="label">Today Cash</div><div class="value">${{ summary?.todayCash | number:'1.2' }}</div></div>
+    <div class="card"><div class="label">Open Tables</div><div class="value">{{ summary?.openTables }}</div></div>
+    <div class="card"><div class="label">Pending Tickets</div><div class="value">{{ summary?.pendingKitchenTickets }}</div></div>
+    <div class="card"><div class="label">Low Stock</div><div class="value">{{ summary?.lowStockItems }}</div></div>
+  </div>
+  <div class="section">
+    <h2>Recent Sales</h2>
+    <table>
+      <thead><tr><th>Outlet</th><th>Orders</th><th>Gross</th><th>Net</th><th>Cash</th><th>Card</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let r of recentSales">
+          <td>{{ r.groupKey }}</td><td>{{ r.orderCount }}</td><td>${{ r.grossSales | number:'1.2' }}</td><td>${{ r.netSales | number:'1.2' }}</td><td>${{ r.cash | number:'1.2' }}</td><td>${{ r.card | number:'1.2' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

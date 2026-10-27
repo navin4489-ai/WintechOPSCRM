@@ -1,0 +1,20 @@
+<div class="page">
+  <h1>Reports & Analytics</h1>
+  <div class="grid">
+    <div class="panel">
+      <h3>Sales Report</h3>
+      <table>
+        <thead><tr><th>Group</th><th>Orders</th><th>Gross</th><th>Net</th><th>Cash</th><th>Card</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let r of sales">
+            <td>{{r.groupKey}}</td><td>{{r.orderCount}}</td><td>${{r.grossSales | number:'1.2'}}</td><td>${{r.netSales | number:'1.2'}}</td><td>${{r.cash | number:'1.2'}}</td><td>${{r.card | number:'1.2'}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>Export</h3>
+      <button (click)="exportReport()">Export CSV</button>
+    </div>
+  </div>
+</div>

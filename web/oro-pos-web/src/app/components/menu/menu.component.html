@@ -1,0 +1,23 @@
+<div class="page">
+  <h1>Menu & Catalogue</h1>
+  <div class="grid">
+    <div class="panel">
+      <h3>Products</h3>
+      <table>
+        <thead><tr><th>Name</th><th>SKU</th><th>Price</th><th>Available</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let p of products">
+            <td>{{p.name}}</td><td>{{p.sku}}</td><td>${{p.price | number:'1.2'}}</td>
+            <td><span class="badge" [class.available]="p.isAvailable">{{p.isAvailable ? 'Yes' : 'No'}}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>Categories</h3>
+      <div class="category-list">
+        <div class="category-item" *ngFor="let c of categories">{{c.name}}</div>
+      </div>
+    </div>
+  </div>
+</div>

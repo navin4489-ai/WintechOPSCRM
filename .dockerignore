@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/build/
+**/.dart_tool/
+mobile/
+**/*.apk
+**/*.aab
+.git/
+.vs/
+.vscode/
+*.log
+appsettings.Development.json

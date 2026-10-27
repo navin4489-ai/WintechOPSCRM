@@ -1,0 +1,22 @@
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">ORO POS</div>
+    <nav>
+      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">Dashboard</a>
+      <a routerLink="/pos" routerLinkActive="active">POS / Orders</a>
+      <a routerLink="/kitchen" routerLinkActive="active">Kitchen (KDS)</a>
+      <a routerLink="/tables" routerLinkActive="active">Tables / Floor Plan</a>
+      <a routerLink="/inventory" routerLinkActive="active">Inventory</a>
+      <a routerLink="/menu" routerLinkActive="active">Menu / Catalogue</a>
+      <a routerLink="/reports" routerLinkActive="active">Reports</a>
+    </nav>
+    <div class="user-info">
+      <div>{{user?.username}}</div>
+      <div class="role">{{user?.roleName}}</div>
+      <button (click)="logout()">Sign Out</button>
+    </div>
+  </aside>
+  <main class="content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

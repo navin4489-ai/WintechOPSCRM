@@ -1,0 +1,32 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/node_modules/
+**/build/
+**/.dart_tool/
+**/.flutter-plugins*
+**/.packages
+
+# The Angular production bundle IS committed: Render's free plan has limited
+# build memory, and the Docker image copies it straight into wwwroot.
+# Rebuild it with `npm run build` (see scripts/build-web.ps1) before deploying
+# after any change under web/oro-pos-web/src.
+
+# Mobile outputs
+mobile/android/.gradle/
+mobile/**/*.apk
+mobile/**/*.aab
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Logs & local env
+*.log
+appsettings.Development.json
+.env

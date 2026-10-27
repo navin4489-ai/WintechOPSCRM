@@ -1,0 +1,36 @@
+<div class="kitchen">
+  <h1>Kitchen Display System (KDS)</h1>
+  <div class="filters">
+    <button (click)="loadTickets()" class="btn-refresh">Refresh</button>
+  </div>
+  <div class="ticket-grid">
+    <div class="ticket-column" *ngFor="let column of ticketColumns">
+      <div class="column-header">{{column.name}}</div>
+      <div class="tickets">
+        <div class="ticket-card" *ngFor="let ticket of column.tickets"
+             [class.status-new]="ticket.status === 'New'"
+             [class.status-accepted]="ticket.status === 'Accepted'"
+             [class.status-inprogress]="ticket.status === 'InProgress'"
+             [class.status-ready]="ticket.status === 'Ready'"
+             [class.status-served]="ticket.status === 'Served'">
+          <div class="ticket-header">
+            <span class="ticket-number">#{{ticket.orderNumber}}</span>
+            <span class="ticket-time">{{ticket.createdAt | date:'HH:mm'}}</span>
+          </div>
+          <div class="ticket-table">Table: {{ticket.tableNumber || 'Counter'}}</div>
+          <div class="ticket-items">
+            <div class="ticket-item" *ngFor="let item of ticket.items">
+              {{item.productName}} ×{{item.quantity}}
+            </div>
+          </div>
+          <div class="ticket-actions">
+            <button *ngIf="ticket.status === 'New'" (click)="updateStatus(ticket.id, 'Accepted')">Accept</button>
+            <button *ngIf="ticket.status === 'Accepted'" (click)="updateStatus(ticket.id, 'InProgress')">Start</button>
+            <button *ngIf="ticket.status === 'InProgress'" (click)="updateStatus(ticket.id, 'Ready')">Ready</button>
+            <button *ngIf="ticket.status === 'Ready'" (click)="updateStatus(ticket.id, 'Served')">Served</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

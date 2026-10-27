@@ -1,0 +1,34 @@
+<div class="page">
+  <h1>Table & Floor Plan Management</h1>
+  <div class="grid">
+    <div class="panel">
+      <h3>Tables</h3>
+      <div class="table-list">
+        <div class="table-row" *ngFor="let t of tables">
+          <span>{{t.tableNumber}}</span>
+          <span>{{t.zoneName || '-'}}</span>
+          <span>{{t.status}}</span>
+          <span>{{t.capacity}} seats</span>
+          <button (click)="changeStatus(t.id, t.status === 'Free' ? 'Occupied' : 'Free')">{{t.status === 'Free' ? 'Occupy' : 'Free'}}</button>
+        </div>
+      </div>
+      <div class="add-form">
+        <h4>Add Table</h4>
+        <input [(ngModel)]="newTable.tableNumber" placeholder="Table Number" />
+        <input [(ngModel)]="newTable.capacity" type="number" placeholder="Capacity" />
+        <button (click)="createTable()">Add</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Zones</h3>
+      <div class="zone-list">
+        <div class="zone-row" *ngFor="let z of zones">{{z.name}}</div>
+      </div>
+      <div class="add-form">
+        <h4>Add Zone</h4>
+        <input [(ngModel)]="newZone.name" placeholder="Zone Name" />
+        <button (click)="createZone()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
