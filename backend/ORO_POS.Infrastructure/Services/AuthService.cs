@@ -187,4 +187,162 @@ public class PermissionSeedService
         _db.Users.Add(adminUser);
         await _db.SaveChangesAsync();
     }
+
+    /// <summary>
+    /// Fills an outlet that has no menu with a working demo menu (categories +
+    /// products priced in ₹), opening stock, zones and tables, so a fresh deploy
+    /// is usable immediately. Every block is guarded, so re-running the seed only
+    /// ever fills gaps and never duplicates data.
+    /// </summary>
+    public async Task SeedMenuAndFloorAsync()
+    {
+        var outlet = await _db.Outlets.OrderBy(o => o.Id).FirstOrDefaultAsync();
+        if (outlet == null) return;
+
+        // Platform runs in Indian Rupees; older rows were seeded as USD.
+        if (!string.Equals(outlet.Currency, "INR", StringComparison.OrdinalIgnoreCase))
+        {
+            outlet.Currency = "INR";
+            outlet.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        await SeedCategoriesAndProductsAsync(outlet.Id);
+        await SeedOpeningStockAsync(outlet.Id);
+        await SeedZonesAndTablesAsync(outlet.Id);
+    }
+
+    private async Task SeedCategoriesAndProductsAsync(int outletId)
+    {
+        if (await _db.Categories.AnyAsync(c => c.OutletId == outletId)) return;
+
+        var menu = new (string Name, int Sort, (string Item, string Sku, string Desc, decimal Price, int Ord)[] Items)[]
+        {
+            ("Starters", 1, new[]
+            {
+                ("Paneer Tikka", "STA-001", "Char-grilled cottage cheese skewers", 280m, 1),
+                ("Chicken Tikka", "STA-002", "Tandoori marinated chicken", 320m, 2),
+                ("Veg Spring Rolls", "STA-003", "Crispy rolled vegetables", 180m, 3),
+                ("Tandoori Mushroom", "STA-004", "Stuffed button mushrooms", 240m, 4),
+            }),
+            ("Main Course", 2, new[]
+            {
+                ("Butter Chicken", "MAI-001", "Creamy tomato gravy", 380m, 1),
+                ("Paneer Butter Masala", "MAI-002", "Cottage cheese in makhani", 320m, 2),
+                ("Dal Tadka", "MAI-003", "Yellow lentils, tempered", 220m, 3),
+                ("Kadai Vegetable", "MAI-004", "Wok-tossed seasonal vegetables", 280m, 4),
+                ("Chicken Biryani", "MAI-005", "Basmati rice, slow cooked", 350m, 5),
+            }),
+            ("Breads & Rice", 3, new[]
+            {
+                ("Butter Naan", "BRD-001", "Tandoor bread finished with butter", 60m, 1),
+                ("Tandoori Roti", "BRD-002", "Whole wheat tandoor bread", 40m, 2),
+                ("Jeera Rice", "BRD-003", "Cumin basmati rice", 150m, 3),
+                ("Veg Pulao", "BRD-004", "Rice with seasonal vegetables", 190m, 4),
+            }),
+            ("Beverages", 4, new[]
+            {
+                ("Masala Chai", "BEV-001", "Spiced Indian tea", 50m, 1),
+                ("Fresh Lime Soda", "BEV-002", "Sweet or salted lime soda", 70m, 2),
+                ("Mango Lassi", "BEV-003", "Sweet yogurt drink", 90m, 3),
+                ("Mineral Water 1L", "BEV-004", "Packaged drinking water", 40m, 4),
+            }),
+            ("Desserts", 5, new[]
+            {
+                ("Gulab Jamun", "DES-001", "Warm milk dumplings in syrup", 90m, 1),
+                ("Rasmalai", "DES-002", "Cottage cheese in saffron milk", 110m, 2),
+                ("Vanilla Ice Cream", "DES-003", "Two scoops", 80m, 3),
+            }),
+        };
+
+        foreach (var (catName, catSort, items) in menu)
+        {
+            var category = new Category { OutletId = outletId, Name = catName, SortOrder = catSort };
+            _db.Categories.Add(category);
+            await _db.SaveChangesAsync();
+
+            foreach (var (item, sku, desc, price, ord) in items)
+            {
+                _db.Products.Add(new Product
+                {
+                    OutletId = outletId,
+                    CategoryId = category.Id,
+                    SKU = sku,
+                    Name = item,
+                    Description = desc,
+                    Price = price,
+                    TaxClass = "Standard",
+                    IsAvailable = true,
+                    SortOrder = ord
+                });
+            }
+            await _db.SaveChangesAsync();
+        }
+    }
+
+    private async Task SeedOpeningStockAsync(int outletId)
+    {
+        if (await _db.InventoryLedgers.AnyAsync()) return;
+
+        var products = await _db.Products
+            .Where(p => p.OutletId == outletId)
+            .OrderBy(p => p.Id)
+            .ToListAsync();
+        if (products.Count == 0) return;
+
+        foreach (var product in products)
+        {
+            _db.InventoryLedgers.Add(new InventoryLedger
+            {
+                ProductId = product.Id,
+                MovementType = "Receipt",
+                Quantity = 100,
+                Location = "Main Store",
+                Source = "OpeningStock"
+            });
+        }
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task SeedZonesAndTablesAsync(int outletId)
+    {
+        int? zoneId;
+        if (await _db.Zones.AnyAsync(z => z.OutletId == outletId))
+        {
+            zoneId = await _db.Zones
+                .Where(z => z.OutletId == outletId)
+                .OrderBy(z => z.Id)
+                .Select(z => (int?)z.Id)
+                .FirstOrDefaultAsync();
+        }
+        else
+        {
+            var indoor = new Zone { OutletId = outletId, Name = "Indoor" };
+            var outdoor = new Zone { OutletId = outletId, Name = "Outdoor" };
+            _db.Zones.AddRange(indoor, outdoor);
+            await _db.SaveChangesAsync();
+            zoneId = indoor.Id;
+        }
+
+        var existingNumbers = await _db.Tables
+            .Where(t => t.OutletId == outletId)
+            .Select(t => t.TableNumber)
+            .ToListAsync();
+
+        for (var i = 1; i <= 8; i++)
+        {
+            var number = i.ToString();
+            if (existingNumbers.Contains(number)) continue;
+
+            _db.Tables.Add(new Table
+            {
+                OutletId = outletId,
+                ZoneId = zoneId,
+                TableNumber = number,
+                Status = "Free",
+                Capacity = i % 4 == 0 ? 6 : 4
+            });
+        }
+        await _db.SaveChangesAsync();
+    }
 }

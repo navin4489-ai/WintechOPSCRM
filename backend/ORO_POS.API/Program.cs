@@ -197,6 +197,7 @@ using (var scope = app.Services.CreateScope())
     var seed = scope.ServiceProvider.GetRequiredService<PermissionSeedService>();
     await seed.SeedRolesAndPermissionsAsync();
     await seed.SeedDefaultOutletAndAdminAsync();
+    await seed.SeedMenuAndFloorAsync();
 }
 
 // Middleware pipeline
