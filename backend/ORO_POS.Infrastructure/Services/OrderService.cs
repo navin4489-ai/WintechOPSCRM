@@ -86,6 +86,9 @@ public class OrderService : IOrderService
         if (user != null && user.Role?.Name != "Owner" && order.OutletId != user.OutletId)
             throw new UnauthorizedAccessException("Access denied to this order.");
 
+        // Quote legacy open orders using today's application policy before the
+        // cashier confirms payment. This read does not save or rewrite closed sales.
+        if (order.Status == "Open") CalculateTotals(order);
         return MapToOrderDto(order);
     }
 
@@ -494,12 +497,17 @@ public class OrderService : IOrderService
         var order = await _db.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) return;
 
+        CalculateTotals(order);
+        order.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static void CalculateTotals(Order order)
+    {
         order.Subtotal = order.OrderItems.Sum(i => i.LineTotal);
         order.DiscountAmount = Math.Clamp(order.DiscountAmount, 0m, order.Subtotal);
         // Match the platform's existing 5% GST policy, rounded to paise on the server.
         order.TaxAmount = Math.Round((order.Subtotal - order.DiscountAmount) * 0.05m, 2, MidpointRounding.AwayFromZero);
         order.TotalAmount = order.Subtotal - order.DiscountAmount + order.TaxAmount;
-        order.UpdatedAt = DateTime.UtcNow;
     }
 
     private async Task RouteOrderToKitchenAsync(int orderId, int userId)

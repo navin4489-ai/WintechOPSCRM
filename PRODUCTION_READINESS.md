@@ -3,7 +3,7 @@
 ## Verified in this pass
 
 - API and Angular production builds succeed.
-- 15 backend tests pass, including checkout/accounting regression tests in
+- 17 backend tests pass in Release, including checkout/accounting regression tests in
   `backend/ORO_POS.Tests/CheckoutTests.cs`.
 - Checkout persists the platform's existing 5% GST policy, rounded to paise.
 - Discounts update persisted GST/total; sales reports do not deduct discounts twice.
@@ -13,6 +13,20 @@
 - Stock/recipe ingredient consumption posts on final settlement, not partial payments.
 - Shift close and Z-report include captured cash and paid-in/out consistently.
 - Table order lookup no longer depends on the first 50 orders in history.
+- Legacy open orders quote the same tax calculation as checkout, without saving
+  a read request or repricing closed historical orders.
+
+## Live verification (27 October 2026)
+
+- Angular bundle `main-2YUEHU2U.js` served successfully.
+- Menu, inventory, reports and kitchen pages rendered; catalogue/stock APIs returned 200.
+- QA takeaway order #17 (`QA checkout verification commit 7754b14`) was created
+  separately from existing table orders: subtotal 600, discount 60, GST 27, total 567 INR.
+- A 1000 INR cash tender captured 567 INR; stock for each of its two products moved 100 → 99.
+- A second payment attempt returned 400, without posting another stock deduction.
+- QA shift #3 was closed through the web UI with counted cash 567 INR. Both the
+  stored shift and Z-report reported zero variance. This QA sale remains in reports;
+  it is not a real customer sale and needs accounting reconciliation before go-live.
 
 Tests use EF InMemory. They do not prove PostgreSQL locking behavior, gateway
 integration, hardware printing, security isolation, or load capacity.

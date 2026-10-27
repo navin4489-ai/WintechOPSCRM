@@ -146,5 +146,27 @@ public class CheckoutTests : IDisposable
         Assert.Single(result.OrderItems);
     }
 
+    [Fact]
+    public async Task LegacyOpenOrderQuotesTaxBeforePaymentWithoutRewritingDatabase()
+    {
+        db.ChangeTracker.Clear();
+        var quote = await orders.GetOrderByIdAsync(1, 1);
+        Assert.Equal(30m, quote!.TaxAmount);
+        Assert.Equal(630m, quote.TotalAmount);
+        db.ChangeTracker.Clear();
+        Assert.Equal(0m, (await db.Orders.FindAsync(1))!.TaxAmount);
+    }
+
+    [Fact]
+    public async Task ClosedHistoricalOrderIsNotRepriced()
+    {
+        var order = await db.Orders.FindAsync(1);
+        order!.Status = "Closed";
+        await db.SaveChangesAsync();
+        var result = await orders.GetOrderByIdAsync(1, 1);
+        Assert.Equal(0m, result!.TaxAmount);
+        Assert.Equal(600m, result.TotalAmount);
+    }
+
     public void Dispose() => db.Dispose();
 }
