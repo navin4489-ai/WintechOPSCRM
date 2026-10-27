@@ -40,6 +40,19 @@ export class PosComponent implements OnInit {
   discountValue: number | null = 0;
   discountReason = '';
   applyingDiscount = false;
+  showNewSale = false;
+  serviceType = 'Takeaway';
+  showVoid = false;
+  voidReason = '';
+  showTransfer = false;
+  transferTableId: number | null = null;
+  productToAdd: ProductDto | null = null;
+  itemQuantity = 1;
+  itemNotes = '';
+  modifiers: Record<number, boolean> = {};
+  approverUsername = '';
+  approverPassword = '';
+  get needsApproval(): boolean { return this.user?.roleName !== 'Owner' && !this.user?.permissions?.includes('ApproveManagerAction'); }
 
   taxRate = 0.05; // 5% GST
 
@@ -115,11 +128,12 @@ export class PosComponent implements OnInit {
     }
   }
 
-  createOrderForTable(tableId: number) {
+  createOrderForTable(tableId?: number, serviceType = 'DineIn') {
+    this.tableLoading = true;
     const req: CreateOrderRequest = {
       outletId: this.user?.outletId || 0,
       tableId,
-      serviceType: 'DineIn',
+      serviceType,
       items: []
     };
     this.api.createOrder(req).subscribe({
@@ -129,6 +143,8 @@ export class PosComponent implements OnInit {
           this.currentOrder = res.data as OrderDto;
           this.orderItems = res.data.orderItems;
           this.calculateTotals();
+          this.showNewSale = false;
+          this.selectedTableId = tableId ?? null;
           const table = this.tables.find(t => t.id === tableId);
           if (table) { table.hasOpenOrder = true; table.status = 'Occupied'; }
         }
@@ -145,8 +161,17 @@ export class PosComponent implements OnInit {
   addItem(p: ProductDto) {
     if (this.tableLoading || this.savingItem || this.processing) return;
     if (!this.currentOrder) { this.toast.warning('Select a table first to start an order.'); return; }
+    this.productToAdd = p;
+    this.itemQuantity = 1;
+    this.itemNotes = '';
+    this.modifiers = {};
+  }
+  confirmAddItem() {
+    const p = this.productToAdd;
+    if (!p || !this.currentOrder || this.savingItem) return;
+    if (!Number.isInteger(this.itemQuantity) || this.itemQuantity < 1 || this.itemQuantity > 999) { this.toast.warning('Enter a whole quantity between 1 and 999.'); return; }
     this.savingItem = true;
-    const item: OrderItemRequest = { productId: p.id, quantity: 1, modifierOptionIds: [], notes: '' };
+    const item: OrderItemRequest = { productId: p.id, quantity: this.itemQuantity, modifierOptionIds: Object.keys(this.modifiers).filter(k => this.modifiers[+k]).map(Number), notes: this.itemNotes };
     this.api.addOrderItem(this.currentOrder.id, item).subscribe({
       next: (res: ApiResponse<OrderDto>) => {
         this.savingItem = false;
@@ -154,6 +179,7 @@ export class PosComponent implements OnInit {
           this.currentOrder = res.data as OrderDto;
           this.orderItems = res.data.orderItems;
           this.calculateTotals();
+          this.productToAdd = null;
         }
       },
       error: (err) => { this.savingItem = false; this.toast.error(this.errMsg(err, `Could not add ${p.name}.`)); }
@@ -189,6 +215,7 @@ export class PosComponent implements OnInit {
     this.discountMode = 'amount';
     this.discountValue = 0;
     this.discountReason = '';
+    this.approverUsername = this.approverPassword = '';
     this.showDiscount = true;
   }
 
@@ -198,9 +225,12 @@ export class PosComponent implements OnInit {
     if (this.applyingDiscount || !this.currentOrder) return;
     const val = Number(this.discountValue ?? 0);
     if (val <= 0) { this.toast.warning('Enter a discount greater than zero.'); return; }
+    if (!this.discountReason.trim()) { this.toast.warning('A discount reason is required.'); return; }
     const req: any = this.discountMode === 'percent'
       ? { percent: val, reason: this.discountReason || 'Discount applied' }
       : { amount: val, reason: this.discountReason || 'Discount applied' };
+    req.approverUsername = this.approverUsername;
+    req.approverPassword = this.approverPassword;
     this.applyingDiscount = true;
     this.api.applyDiscount(this.currentOrder.id, req).subscribe({
       next: (res) => {
@@ -210,6 +240,7 @@ export class PosComponent implements OnInit {
           this.orderItems = res.data.orderItems;
           this.calculateTotals();
           this.showDiscount = false;
+          this.approverUsername = this.approverPassword = '';
           this.toast.success(`Discount of ₹${(res.data.discountAmount ?? 0).toFixed(2)} applied.`);
         }
       },
@@ -260,11 +291,18 @@ export class PosComponent implements OnInit {
 
   voidOrder() {
     if (!this.currentOrder) return;
-    const reason = window.prompt('Reason for voiding this order (required):', 'Customer request');
-    if (reason === null) return;                    // cancelled
+    this.showVoid = true;
+    this.voidReason = '';
+    this.approverUsername = this.approverPassword = '';
+  }
+  confirmVoid() {
+    if (!this.currentOrder || this.savingItem) return;
+    const reason = this.voidReason;
     if (!reason.trim()) { this.toast.warning('A reason is required to void an order.'); return; }
-    this.api.voidOrder(this.currentOrder.id, { orderId: this.currentOrder.id, reason: reason.trim() }).subscribe({
+    this.savingItem = true;
+    this.api.voidOrder(this.currentOrder.id, { orderId: this.currentOrder.id, reason: reason.trim(), approverUsername: this.approverUsername, approverPassword: this.approverPassword }).subscribe({
       next: (res: ApiResponse<OrderDto>) => {
+        this.savingItem = false;
         if (res.success) {
           this.currentOrder = null;
           this.orderItems = [];
@@ -273,9 +311,17 @@ export class PosComponent implements OnInit {
           const outletId = this.user?.outletId;
           this.api.getTables(outletId).subscribe((r: ApiResponse<TableDto[]>) => { if (r.success) this.tables = r.data || []; });
           this.toast.success('Order voided.');
+          this.showVoid = false;
+          this.approverUsername = this.approverPassword = '';
         }
       },
-      error: (err) => this.toast.error(this.errMsg(err, 'Could not void the order.'))
+      error: (err) => {this.savingItem = false; this.toast.error(this.errMsg(err, 'Could not void the order.'));}
     });
+  }
+  get freeTables() { return this.tables.filter(t => !t.hasOpenOrder); }
+  transfer() {
+    if (!this.currentOrder || !this.transferTableId || this.savingItem) return;
+    this.savingItem = true;
+    this.api.transferTable(this.currentOrder.id, this.transferTableId).subscribe({next: r => { this.savingItem = false; if (r.data) {this.currentOrder = r.data; this.selectedTableId = r.data.tableId ?? null;} this.showTransfer = false; this.api.getTables(this.user.outletId).subscribe(t => this.tables = t.data || []); this.toast.success('Table transferred.'); }, error: e => {this.savingItem = false; this.toast.error(this.errMsg(e, 'Transfer failed.'));}});
   }
 }

@@ -6,11 +6,14 @@ using ORO_POS.Infrastructure.Data;
 using ORO_POS.Infrastructure.Services;
 using ORO_POS.Core.Interfaces;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Configuration
-builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+// CreateBuilder already loads appsettings followed by environment variables.
+// Re-adding JSON here would override deployment secrets with checked-in defaults.
 
 // DbContext — PostgreSQL on Render. DATABASE_URL (Render's convention) wins over
 // the appsettings default so a local dev connection string never overrides it.
@@ -89,6 +92,8 @@ static string Quote(string value) => $"\"{value.Replace("\\", "\\\\").Replace("\
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "ORO_POS_Super_Secret_Key_32Chars!";
+if (builder.Environment.IsProduction() && (jwtKey == "ORO_POS_Super_Secret_Key_32Chars!" || Encoding.UTF8.GetByteCount(jwtKey) < 32))
+    throw new InvalidOperationException("Set a unique Jwt__Key of at least 32 bytes before starting production.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -106,6 +111,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(options => {
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 
 // Services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -125,11 +136,13 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", p =>
     {
-        p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        p.WithOrigins("https://the-bathany.onrender.com", "http://localhost:4200", "http://localhost:5000")
+            .AllowAnyMethod().AllowAnyHeader();
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddScoped<ORO_POS.API.Security.OutletAuthorizationFilter>();
+builder.Services.AddControllers(options => options.Filters.AddService<ORO_POS.API.Security.OutletAuthorizationFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -214,6 +227,7 @@ if (!app.Environment.IsProduction())
 }
 
 app.UseCors("AllowAll");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -226,27 +240,28 @@ app.Use(async (context, next) =>
     }
     catch (UnauthorizedAccessException ex)
     {
-        context.Response.StatusCode = 401;
+        context.Response.StatusCode = 403;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync($"{{\"success\":false,\"errors\":[\"{ex.Message}\"]}}");
+        await context.Response.WriteAsJsonAsync(new { success = false, errors = new[] { ex.Message } });
     }
     catch (KeyNotFoundException ex)
     {
         context.Response.StatusCode = 404;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync($"{{\"success\":false,\"errors\":[\"{ex.Message}\"]}}");
+        await context.Response.WriteAsJsonAsync(new { success = false, errors = new[] { ex.Message } });
     }
     catch (InvalidOperationException ex)
     {
         context.Response.StatusCode = 400;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync($"{{\"success\":false,\"errors\":[\"{ex.Message}\"]}}");
+        await context.Response.WriteAsJsonAsync(new { success = false, errors = new[] { ex.Message } });
     }
     catch (Exception ex)
     {
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync($"{{\"success\":false,\"errors\":[\"Internal server error: {ex.Message}\"]}}");
+        app.Logger.LogError(ex, "Unhandled request failure {TraceId}", context.TraceIdentifier);
+        await context.Response.WriteAsJsonAsync(new { success = false, errors = new[] { "The request could not be completed. Refresh before retrying." }, traceId = context.TraceIdentifier });
     }
 });
 

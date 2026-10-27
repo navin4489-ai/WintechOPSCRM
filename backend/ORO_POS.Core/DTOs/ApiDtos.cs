@@ -297,6 +297,8 @@ public class ProcessPaymentRequest
 
 public class VoidOrderRequest
 {
+    public string? ApproverUsername { get; set; }
+    public string? ApproverPassword { get; set; }
     public int OrderId { get; set; }
     public string Reason { get; set; } = string.Empty;
     public int? ApprovedByUserId { get; set; }
@@ -304,6 +306,8 @@ public class VoidOrderRequest
 
 public class ApplyDiscountRequest
 {
+    public string? ApproverUsername { get; set; }
+    public string? ApproverPassword { get; set; }
     /// <summary>Flat discount amount in currency units. Ignored when <see cref="Percent"/> is set.</summary>
     public decimal Amount { get; set; }
     /// <summary>Optional percentage discount (0-100) applied to the subtotal.</summary>

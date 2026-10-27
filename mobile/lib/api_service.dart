@@ -1,196 +1,227 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'models.dart';
 
-class ApiService {
-  // Production (Render) — ORO POS API
-  static const String baseUrl = 'https://the-bathany.onrender.com/api';
-  // Local development options:
-  // static const String baseUrl = 'http://10.0.2.2:5000/api'; // Android emulator localhost
-  // static const String baseUrl = 'http://localhost:5000/api'; // For physical device, use your PC's IP
+class ApiException implements Exception {
+  final String message;
+  final int? status;
+  const ApiException(this.message, [this.status]);
+  @override
+  String toString() => message;
+}
 
+class ApiService {
+  static const baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://the-bathany.onrender.com/api',
+  );
+  final http.Client client;
+  final FlutterSecureStorage storage;
   String? _token;
   User? _user;
+  void Function()? onSessionExpired;
+  ApiService({http.Client? client, FlutterSecureStorage? storage})
+    : client = client ?? http.Client(),
+      storage = storage ?? const FlutterSecureStorage();
+  String? get token => _token;
+  User? get user => _user;
+  bool get isAuthenticated => _token != null && _user != null;
+  int get outletId =>
+      user?.outletId ??
+      (throw const ApiException(
+        'Assign this account to an outlet before using POS.',
+      ));
+  bool can(String permission) =>
+      user?.roleName == 'Owner' ||
+      (user?.permissions.contains(permission) ?? false);
 
   Future<void> init() async {
+    // Remove insecure credentials stored by earlier app versions. Require sign-in
+    // rather than copying bearer credentials out of unencrypted preferences.
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('token');
-    final userJson = prefs.getString('user');
-    if (userJson != null) {
-      _user = User.fromJson(jsonDecode(userJson));
+    await prefs.remove('token');
+    await prefs.remove('user');
+    try {
+      _token = await storage.read(key: 'oro_token');
+      final saved = await storage.read(key: 'oro_user');
+      if (_token == null || saved == null) {
+        await logout();
+        return;
+      }
+      final claims = jsonDecode(
+        utf8.decode(
+          base64Url.decode(base64Url.normalize(_token!.split('.')[1])),
+        ),
+      );
+      if ((claims['exp'] as num) * 1000 <=
+          DateTime.now().millisecondsSinceEpoch) {
+        await logout();
+        return;
+      }
+      _user = User.fromJson(jsonDecode(saved));
+    } catch (_) {
+      await logout();
     }
   }
 
-  String? get token => _token;
-  User? get user => _user;
-  bool get isAuthenticated => _token != null;
-
-  Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    if (_token != null) 'Authorization': 'Bearer $_token',
-  };
+  Future<dynamic> request(
+    String path, {
+    String method = 'GET',
+    Object? body,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = {
+      'Content-Type': 'application/json',
+      if (_token != null) 'Authorization': 'Bearer $_token',
+    };
+    try {
+      final response = await (switch (method) {
+        'POST' => client.post(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        ),
+        'PUT' => client.put(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        ),
+        'DELETE' => client.delete(uri, headers: headers),
+        _ => client.get(uri, headers: headers),
+      }).timeout(const Duration(seconds: 65));
+      if (response.statusCode == 401) {
+        if (path != '/auth/login') {
+          await logout();
+          onSessionExpired?.call();
+        }
+        throw const ApiException(
+          'Session expired or invalid credentials. Please sign in.',
+          401,
+        );
+      }
+      if (response.statusCode == 403) {
+        throw const ApiException(
+          'Your role does not have permission for this action.',
+          403,
+        );
+      }
+      Map<String, dynamic>? envelope;
+      try {
+        envelope = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        /* Non-JSON upstream failure. */
+      }
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          envelope?['success'] != true) {
+        final errors = envelope?['errors'];
+        throw ApiException(
+          errors is List && errors.isNotEmpty
+              ? errors.join('\n')
+              : 'Request failed (${response.statusCode}). Refresh before retrying.',
+          response.statusCode,
+        );
+      }
+      return envelope?['data'];
+    } on TimeoutException {
+      throw const ApiException(
+        'Connection timed out. A write may have completed: refresh before retrying.',
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        'Cannot reach the server. Check your internet connection and refresh before retrying.',
+      );
+    }
+  }
 
   Future<bool> login(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
+    final data = await request(
+      '/auth/login',
+      method: 'POST',
+      body: {
+        'username': username.trim(),
         'password': password,
-        'deviceName': 'Flutter Mobile',
+        'deviceName': 'ORO Android',
         'stationType': 'POS',
-      }),
+      },
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        final loginData = data['data'];
-        _token = loginData['token'];
-        _user = User.fromJson(loginData['user']);
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', _token!);
-        await prefs.setString('user', jsonEncode(loginData['user']));
-        return true;
-      }
-    }
-    return false;
+    _token = data['token'];
+    _user = User.fromJson(data['user']);
+    await storage.write(key: 'oro_token', value: _token);
+    await storage.write(key: 'oro_user', value: jsonEncode(data['user']));
+    return true;
   }
 
   Future<void> logout() async {
     _token = null;
     _user = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await storage.delete(key: 'oro_token');
+    await storage.delete(key: 'oro_user');
   }
 
-  Future<List<Product>> getProducts(int outletId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/products?outletId=$outletId&availableOnly=true'),
-      headers: _headers,
-    );
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((p) => Product.fromJson(p))
-            .toList();
-      }
-    }
-    throw Exception('Failed to load products');
-  }
-
-  Future<List<Table>> getTables(int outletId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/tables/outlet/$outletId'),
-      headers: _headers,
-    );
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((t) => Table.fromJson(t))
-            .toList();
-      }
-    }
-    throw Exception('Failed to load tables');
-  }
-
+  Future<List<Product>> getProducts(int outletId) async => ((await request(
+    '/products?outletId=$outletId&availableOnly=true',
+  )) as List).map((x) => Product.fromJson(x)).toList();
+  Future<List<Table>> getTables(int outletId) async =>
+      ((await request('/tables/outlet/$outletId')) as List)
+          .map((x) => Table.fromJson(x))
+          .toList();
   Future<Order> createOrder({
     required int outletId,
-    required int tableId,
+    int? tableId,
     required String serviceType,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/orders'),
-      headers: _headers,
-      body: jsonEncode({
+  }) async => Order.fromJson(
+    await request(
+      '/orders',
+      method: 'POST',
+      body: {
         'outletId': outletId,
-        'tableId': tableId,
+        'tableId': ?tableId,
         'serviceType': serviceType,
         'items': [],
-      }),
-    );
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return Order.fromJson(data['data']);
-      }
-    }
-    throw Exception('Failed to create order');
-  }
-
+      },
+    ),
+  );
   Future<Order> addOrderItem({
     required int orderId,
     required int productId,
     required int quantity,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/orders/$orderId/items'),
-      headers: _headers,
-      body: jsonEncode({
+  }) async => Order.fromJson(
+    await request(
+      '/orders/$orderId/items',
+      method: 'POST',
+      body: {
         'productId': productId,
         'quantity': quantity,
         'modifierOptionIds': [],
         'notes': '',
-      }),
-    );
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return Order.fromJson(data['data']);
-      }
-    }
-    throw Exception('Failed to add item');
-  }
-
+      },
+    ),
+  );
   Future<Order> processPayment({
     required int orderId,
     required String tenderType,
     required double amount,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/orders/$orderId/payment'),
-      headers: _headers,
-      body: jsonEncode({
-        'orderId': orderId,
-        'tenderType': tenderType,
-        'amount': amount,
-      }),
-    );
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return Order.fromJson(data['data']);
-      }
-    }
-    throw Exception('Failed to process payment');
-  }
-
-  Future<List<KitchenTicket>> getKitchenTickets({int? outletId}) async {
-    final url = Uri.parse('$baseUrl/kitchentickets')
-        .replace(queryParameters: outletId != null ? {'outletId': outletId.toString()} : null);
-    final response = await http.get(url, headers: _headers);
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((t) => KitchenTicket.fromJson(t))
-            .toList();
-      }
-    }
-    throw Exception('Failed to load kitchen tickets');
-  }
-
+  }) async => Order.fromJson(
+    await request(
+      '/orders/$orderId/payment',
+      method: 'POST',
+      body: {'orderId': orderId, 'tenderType': tenderType, 'amount': amount},
+    ),
+  );
+  Future<List<KitchenTicket>> getKitchenTickets({int? outletId}) async =>
+      ((await request(
+        '/kitchentickets?outletId=${outletId ?? this.outletId}',
+      )) as List).map((x) => KitchenTicket.fromJson(x)).toList();
   Future<void> updateTicketStatus(int ticketId, String status) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/kitchentickets/$ticketId/status?status=$status'),
-      headers: _headers,
+    await request(
+      '/kitchentickets/$ticketId/status?status=$status',
+      method: 'PUT',
     );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update ticket status');
-    }
   }
 }

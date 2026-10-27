@@ -65,7 +65,12 @@ ORO_POS_Solution/
 18. **Categories** - Menu categorization
 19. **__EFMigrationsHistory** - EF migrations tracking
 
-## Implemented Functional Requirements (from BRD)
+## Original requirement inventory (from BRD)
+
+**This is a historical checklist, not proof of implementation or acceptance.**
+Some original checkmarks overstated prototype support. The current native Android
+workflows, test results and outstanding release gates are documented in
+`mobile/README.md` and `PRODUCTION_READINESS.md`. Do not treat every item below as delivered.
 
 ### 5.1 Front-of-House & Retail Order Engine
 - [x] POS-001: Visual floor plans, zones, tables, table status
@@ -84,7 +89,7 @@ ORO_POS_Solution/
 - [x] INV-004: Inventory deduction for qualifying sales
 - [x] INV-005: Batch/lot tracking
 - [x] INV-006: Low-stock alerts and stock variance reports
-- [x] INV-007: Supplier/purchase-order workflows
+- [ ] INV-007: Supplier/purchase-order workflows
 
 ### 5.3 Kitchen Display System (KDS)
 - [x] KDS-001: Route order items to configured stations
@@ -96,8 +101,8 @@ ORO_POS_Solution/
 
 ### 5.4 Staff, Shifts & RBAC
 - [x] HR-001: Staff accounts, roles, outlet scope
-- [x] HR-002: Shift scheduling, clock-in/out
-- [x] HR-003: Manager attendance correction with audit
+- [ ] HR-002: Shift scheduling, clock-in/out (cash shifts are implemented; attendance scheduling is not)
+- [ ] HR-003: Manager attendance correction with audit
 - [x] HR-004: Protected sensitive actions with permissions/manager approval
 - [x] HR-005: Secure sign-in, configurable session timeout
 
@@ -116,9 +121,9 @@ ORO_POS_Solution/
 - [x] BR-004: Inventory deduction not duplicated on retries
 - [x] BR-005: Items marked unavailable below stock thresholds
 - [x] BR-006: Cancellation notifies kitchen stations, preserves audit
-- [x] BR-007: Printer/KDS failure alert and fallback
+- [ ] BR-007: Printer/KDS failure alert and fallback (Android OS printing is integrated; hardware acceptance remains)
 - [x] BR-008: End-of-day close identifies exceptions
-- [x] BR-009: Configurable tax, service charge, rounding per jurisdiction
+- [ ] BR-009: Configurable tax, service charge, rounding per jurisdiction (current policy is 5% GST rounded to paise)
 - [x] BR-010: Sensitive data not exposed in logs/reports/displays
 
 ## API Endpoints

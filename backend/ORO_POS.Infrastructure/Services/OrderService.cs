@@ -23,6 +23,8 @@ public class OrderService : IOrderService
 
     public async Task<OrderDto> CreateOrderAsync(CreateOrderRequest request, int userId)
     {
+        await using var tx = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable) : null;
         var user = await _db.Users.Include(u => u.Outlet).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
         if (user == null) throw new UnauthorizedAccessException("User not found or inactive.");
         if (request.OutletId != user.OutletId && user.Role?.Name != "Owner")
@@ -31,7 +33,15 @@ public class OrderService : IOrderService
         var shift = await _db.Shifts.FirstOrDefaultAsync(s => s.UserId == userId && s.OutletId == request.OutletId && s.Status == ShiftStatus.Open.ToString());
         if (shift == null) throw new InvalidOperationException("No open shift for this user. Open a shift first.");
 
-        var orderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{await _db.Orders.CountAsync(o => o.OutletId == request.OutletId && o.CreatedAt.Date == DateTime.UtcNow.Date) + 1:D4}";
+        if (request.TableId.HasValue)
+        {
+            var table = await _db.Tables.FindAsync(request.TableId.Value);
+            if (table == null || table.OutletId != request.OutletId) throw new InvalidOperationException("Table does not belong to this outlet.");
+            if (await _db.Orders.AnyAsync(o => o.TableId == table.Id && o.Status == "Open"))
+                throw new InvalidOperationException("This table already has an open order. Refresh and open the existing order.");
+        }
+
+        var orderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..12].ToUpperInvariant()}";
 
         var order = new Order
         {
@@ -67,6 +77,7 @@ public class OrderService : IOrderService
 
         // Route to kitchen
         await RouteOrderToKitchenAsync(order.Id, userId);
+        if (tx != null) await tx.CommitAsync();
 
         return await GetOrderByIdAsync(order.Id, userId);
     }
@@ -152,6 +163,7 @@ public class OrderService : IOrderService
 
     public async Task<OrderDto> UpdateOrderStatusAsync(int orderId, string status, int userId, string? reason = null)
     {
+        if (status != "Open") throw new InvalidOperationException("Use the dedicated payment, void or refund action to change financial status.");
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
         order.Status = status;
@@ -177,21 +189,29 @@ public class OrderService : IOrderService
     {
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        if (order.Status != "Open") throw new InvalidOperationException("Only open orders can be voided. Use refund for a settled sale.");
+        if (string.IsNullOrWhiteSpace(request.Reason)) throw new InvalidOperationException("A void reason is required.");
+        if (await _db.Payments.AnyAsync(p => p.OrderId == orderId && p.Status == "Captured"))
+            throw new InvalidOperationException("An order with captured payments cannot be voided.");
 
         // Check permission
         var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId);
         if (user == null) throw new UnauthorizedAccessException("User not found.");
 
-        bool canVoid = user.Role?.Name == "Owner" || user.Role?.Name == "StoreManager" ||
-                       (user.Role?.Name == "Cashier" && order.UserId == userId);
+        bool canVoid = user.Role?.Name == "Owner" || (user.OutletId == order.OutletId &&
+            (JsonSerializer.Deserialize<string[]>(user.Role?.Permissions ?? "[]") ?? []).Contains("VoidOrder"));
 
         if (!canVoid) throw new UnauthorizedAccessException("You do not have permission to void this order.");
+        var approver = await RequireManagerApprovalAsync(userId, order.OutletId, request.ApproverUsername, request.ApproverPassword);
 
         order.Status = OrderStatus.Voided.ToString();
         order.ClosedAt = DateTime.UtcNow;
         order.ClosedBy = user.Username;
         order.UpdatedAt = DateTime.UtcNow;
         order.UpdatedBy = user.Username;
+
+        var tickets = await _db.KitchenTickets.Where(t => t.OrderId == orderId && t.Status != "Served").ToListAsync();
+        foreach (var ticket in tickets) { ticket.Status = "Cancelled"; ticket.UpdatedAt = DateTime.UtcNow; }
 
         if (order.TableId.HasValue)
         {
@@ -208,7 +228,7 @@ public class OrderService : IOrderService
             Action = "VoidOrder",
             Entity = "Order",
             EntityId = orderId,
-            Reason = request.Reason,
+            Reason = $"{request.Reason} (approved by {approver})",
             AfterValues = JsonSerializer.Serialize(new { orderId, status = "Voided" }),
             CreatedAt = DateTime.UtcNow
         });
@@ -219,6 +239,7 @@ public class OrderService : IOrderService
 
     public async Task<OrderDto> ApplyDiscountAsync(int orderId, ApplyDiscountRequest request, int userId)
     {
+        if (string.IsNullOrWhiteSpace(request.Reason)) throw new InvalidOperationException("A discount reason is required.");
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
         if (order.Status != "Open") throw new InvalidOperationException("Cannot discount a closed order.");
@@ -232,6 +253,7 @@ public class OrderService : IOrderService
         bool canDiscount = user.Role?.Name == "Owner" || user.Role?.Name == "StoreManager" ||
                            (JsonSerializer.Deserialize<string[]>(user.Role?.Permissions ?? "[]")?.Contains(nameof(Permission.ApplyDiscount)) ?? false);
         if (!canDiscount) throw new UnauthorizedAccessException("You do not have permission to apply a discount.");
+        var approver = await RequireManagerApprovalAsync(userId, order.OutletId, request.ApproverUsername, request.ApproverPassword);
 
         // Resolve discount amount: percentage (of subtotal) takes precedence when provided.
         decimal discount;
@@ -261,7 +283,7 @@ public class OrderService : IOrderService
             Action = "ApplyDiscount",
             Entity = "Order",
             EntityId = orderId,
-            Reason = request.Reason,
+            Reason = $"{request.Reason} (approved by {approver})",
             BeforeValues = JsonSerializer.Serialize(before),
             AfterValues = JsonSerializer.Serialize(new { orderId, discount, order.TotalAmount }),
             CreatedAt = DateTime.UtcNow
@@ -317,13 +339,14 @@ public class OrderService : IOrderService
         if (order.OrderItems.Count == 0) throw new InvalidOperationException("Cannot pay an empty order.");
         if (request.TenderType != "Cash" && request.TenderType != "Card" && request.TenderType != "UPI")
             throw new InvalidOperationException("Unsupported tender type.");
-        if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount)
-            throw new InvalidOperationException("Payment must be positive with at most two decimal places.");
+        if (request.Amount < 0 || decimal.Round(request.Amount, 2) != request.Amount)
+            throw new InvalidOperationException("Payment cannot be negative and must have at most two decimal places.");
 
         await RecalculateOrderTotalsAsync(orderId);
         var totalPaid = order.Payments.Where(p => p.Status == "Captured").Sum(p => p.Amount);
         var balance = order.TotalAmount - totalPaid;
-        if (balance <= 0) throw new InvalidOperationException("Order has no remaining balance.");
+        if (request.Amount == 0 && order.TotalAmount > 0) throw new InvalidOperationException("Payment must be positive for a non-zero bill.");
+        if (balance <= 0 && !(order.TotalAmount == 0 && order.Payments.Count == 0)) throw new InvalidOperationException("Order has no remaining balance.");
         if (request.TenderType != "Cash" && request.Amount > balance)
             throw new InvalidOperationException("Non-cash payment cannot exceed the remaining balance.");
         // Cash tendered can exceed the balance; change returned is not revenue.
@@ -374,10 +397,58 @@ public class OrderService : IOrderService
         return await GetOrderByIdAsync(orderId, userId);
     }
 
+    public async Task<OrderDto> RefundAsync(int orderId, RefundRequest request, int userId)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason) || string.IsNullOrWhiteSpace(request.Reference))
+            throw new InvalidOperationException("Refund reason and manual/bank refund reference are required.");
+        await using var tx = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable) : null;
+        var order = await _db.Orders.Include(o => o.Payments).FirstOrDefaultAsync(o => o.Id == orderId)
+            ?? throw new KeyNotFoundException("Order not found.");
+        var actor = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive)
+            ?? throw new UnauthorizedAccessException("User not found.");
+        var perms = JsonSerializer.Deserialize<string[]>(actor.Role?.Permissions ?? "[]") ?? [];
+        if (actor.Role?.Name != "Owner" && (actor.OutletId != order.OutletId || !perms.Contains("RefundOrder")))
+            throw new UnauthorizedAccessException("Refund permission required for this outlet.");
+        var approver = await RequireManagerApprovalAsync(userId, order.OutletId, request.ApproverUsername, request.ApproverPassword);
+        if (order.Status != "Closed") throw new InvalidOperationException("Only settled orders can be refunded, once.");
+        var captured = order.Payments.Where(p => p.Status == "Captured").ToList();
+        var cash = captured.Where(p => p.TenderType == "Cash").Sum(p => p.Amount);
+        if (cash > 0)
+        {
+            var shift = await _db.Shifts.FirstOrDefaultAsync(s => s.UserId == userId && s.OutletId == order.OutletId && s.Status == "Open")
+                ?? throw new InvalidOperationException("Open your shift before recording a cash refund.");
+            shift.PaidOut += cash;
+        }
+        foreach (var group in captured.GroupBy(p => p.TenderType))
+            _db.Payments.Add(new Payment { OrderId = orderId, TenderType = group.Key, Amount = -group.Sum(p => p.Amount),
+                Status = "Refunded", Reference = request.Reference.Trim(), ProcessedAt = DateTime.UtcNow, CreatedBy = actor.Username });
+        if (request.Restock)
+        {
+            var saleEntries = await _db.InventoryLedgers.Where(l => l.Source == $"Order_{orderId}" && l.MovementType == "Sale").ToListAsync();
+            foreach (var ledger in saleEntries)
+                _db.InventoryLedgers.Add(new InventoryLedger { ProductId = ledger.ProductId, MovementType = "Receipt", Quantity = ledger.Quantity,
+                    ActorId = userId, Source = $"Refund_{orderId}" });
+        }
+        order.Status = "Refunded";
+        order.UpdatedAt = DateTime.UtcNow;
+        order.UpdatedBy = actor.Username;
+        _db.AuditLogs.Add(new AuditLog { ActorId = userId, Action = "RefundOrder", Entity = "Order", EntityId = orderId,
+            Reason = $"{request.Reason.Trim()} (approved by {approver})", AfterValues = JsonSerializer.Serialize(new { request.Reference, request.Restock, Amount = captured.Sum(p => p.Amount) }) });
+        await _db.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
+        return (await GetOrderByIdAsync(orderId, userId))!;
+    }
+
     public async Task<OrderDto> TransferTableAsync(int orderId, int newTableId, int userId)
     {
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        if (order.Status != "Open") throw new InvalidOperationException("Only open orders can be transferred.");
+        var destination = await _db.Tables.FindAsync(newTableId);
+        if (destination == null || destination.OutletId != order.OutletId) throw new InvalidOperationException("Destination table must be in the same outlet.");
+        if (await _db.Orders.AnyAsync(o => o.TableId == newTableId && o.Status == "Open" && o.Id != orderId))
+            throw new InvalidOperationException("Destination table is occupied. Use merge instead.");
 
         var oldTableId = order.TableId;
         order.TableId = newTableId;
@@ -401,13 +472,18 @@ public class OrderService : IOrderService
         var source = await _db.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == sourceOrderId && !o.IsDeleted);
         var target = await _db.Orders.FindAsync(targetOrderId);
         if (source == null || target == null) throw new KeyNotFoundException("Order not found.");
+        if (source.Id == target.Id || source.Status != "Open" || target.Status != "Open" || source.OutletId != target.OutletId)
+            throw new InvalidOperationException("Merge requires two different open orders in the same outlet.");
+        if (source.DiscountAmount != 0 || target.DiscountAmount != 0 || await _db.Payments.AnyAsync(p => p.OrderId == sourceOrderId || p.OrderId == targetOrderId))
+            throw new InvalidOperationException("Remove discounts and settle existing payments before merging.");
 
         foreach (var item in source.OrderItems)
         {
             item.OrderId = targetOrderId;
         }
 
-        source.Status = OrderStatus.Closed.ToString();
+        source.Status = "Merged";
+        source.Subtotal = source.TaxAmount = source.TotalAmount = 0;
         source.ClosedAt = DateTime.UtcNow;
 
         await RecalculateOrderTotalsAsync(targetOrderId);
@@ -418,6 +494,9 @@ public class OrderService : IOrderService
             var table = await _db.Tables.FindAsync(source.TableId.Value);
             if (table != null) table.Status = "Free";
         }
+        foreach (var ticket in await _db.KitchenTickets.Where(t => t.OrderId == sourceOrderId && t.Status != "Served").ToListAsync()) ticket.Status = "Cancelled";
+        await _db.SaveChangesAsync();
+        await RouteOrderToKitchenAsync(targetOrderId, userId);
 
         return await GetOrderByIdAsync(targetOrderId, userId);
     }
@@ -426,8 +505,16 @@ public class OrderService : IOrderService
     {
         var order = await _db.Orders.FindAsync(orderId);
         if (order == null || order.IsDeleted) throw new KeyNotFoundException("Order not found.");
+        if (order.Status != "Open" || order.DiscountAmount != 0 || await _db.Payments.AnyAsync(p => p.OrderId == orderId))
+            throw new InvalidOperationException("Split requires an open order without discounts or payments.");
+        var destination = await _db.Tables.FindAsync(newTableId);
+        if (destination == null || destination.OutletId != order.OutletId || await _db.Orders.AnyAsync(o => o.TableId == newTableId && o.Status == "Open"))
+            throw new InvalidOperationException("Select a free table in the same outlet.");
+        var validIds = await _db.OrderItems.Where(i => i.OrderId == orderId).Select(i => i.Id).ToListAsync();
+        if (orderItemIds.Count == 0 || orderItemIds.Distinct().Count() != orderItemIds.Count || orderItemIds.Except(validIds).Any() || orderItemIds.Count >= validIds.Count)
+            throw new InvalidOperationException("Choose a non-empty subset of this order's items. Leave at least one item on the original bill.");
 
-        var newOrderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{await _db.Orders.CountAsync(o => o.OutletId == order.OutletId && o.CreatedAt.Date == DateTime.UtcNow.Date) + 1:D4}";
+        var newOrderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..12].ToUpperInvariant()}";
 
         var newOrder = new Order
         {
@@ -451,12 +538,27 @@ public class OrderService : IOrderService
         {
             item.OrderId = newOrder.Id;
         }
+        destination.Status = "Occupied";
+        await _db.SaveChangesAsync();
 
         await RecalculateOrderTotalsAsync(orderId);
         await RecalculateOrderTotalsAsync(newOrder.Id);
         await _db.SaveChangesAsync();
+        await RouteOrderToKitchenAsync(newOrder.Id, userId);
 
         return await GetOrderByIdAsync(newOrder.Id, userId);
+    }
+
+    private async Task<string> RequireManagerApprovalAsync(int userId, int outletId, string? username, string? password)
+    {
+        var actor = await _db.Users.Include(u => u.Role).FirstAsync(u => u.Id == userId && u.IsActive);
+        static bool CanApprove(User user) => user.Role?.Name == "Owner" || (JsonSerializer.Deserialize<string[]>(user.Role?.Permissions ?? "[]") ?? []).Contains("ApproveManagerAction");
+        if (CanApprove(actor)) return actor.Username;
+        var approver = string.IsNullOrWhiteSpace(username) ? null : await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Username == username && u.IsActive);
+        if (approver == null || !CanApprove(approver) || (approver.Role?.Name != "Owner" && approver.OutletId != outletId)
+            || string.IsNullOrEmpty(password) || !BCrypt.Net.BCrypt.Verify(password, approver.PasswordHash))
+            throw new UnauthorizedAccessException("Approval from an active manager in this outlet is required.");
+        return approver.Username;
     }
 
     private async Task AddItemToOrderAsync(Order order, OrderItemRequest request, int userId, bool save = true)
@@ -464,8 +566,19 @@ public class OrderService : IOrderService
         var product = await _db.Products.FindAsync(request.ProductId);
         if (product == null || product.IsDeleted) throw new KeyNotFoundException("Product not found.");
         if (!product.IsAvailable) throw new InvalidOperationException("Product is not available.");
+        if (product.OutletId != order.OutletId) throw new InvalidOperationException("Product does not belong to this order's outlet.");
+        if (request.Quantity < 1 || request.Quantity > 999) throw new InvalidOperationException("Quantity must be between 1 and 999.");
 
         var modifiers = await _db.ModifierOptions.Where(mo => request.ModifierOptionIds.Contains(mo.Id)).ToListAsync();
+        var groups = await _db.ProductModifierGroups.Include(g => g.ModifierGroup).Where(g => g.ProductId == product.Id).ToListAsync();
+        if (modifiers.Count != request.ModifierOptionIds.Distinct().Count() || modifiers.Any(m => !groups.Any(g => g.ModifierGroupId == m.ModifierGroupId)))
+            throw new InvalidOperationException("Invalid product modifiers.");
+        foreach (var g in groups)
+        {
+            var count = modifiers.Count(m => m.ModifierGroupId == g.ModifierGroupId);
+            if (count < Math.Max(g.ModifierGroup.MinSelections, g.ModifierGroup.IsRequired ? 1 : 0) || count > g.ModifierGroup.MaxSelections)
+                throw new InvalidOperationException($"Check selections for {g.ModifierGroup.Name}.");
+        }
         var modifiersJson = System.Text.Json.JsonSerializer.Serialize(modifiers.Select(m => new { m.Id, m.Name, m.PriceImpact }));
 
         var modifierPriceImpact = modifiers.Sum(m => m.PriceImpact);
@@ -518,6 +631,8 @@ public class OrderService : IOrderService
         var itemsByStation = order.OrderItems.GroupBy(i => i.KitchenStation ?? "General");
         foreach (var group in itemsByStation)
         {
+            if (!group.Any(i => i.Status != "Served")) continue;
+            if (await _db.KitchenTickets.AnyAsync(t => t.OrderId == orderId && t.StationName == group.Key && t.Status != "Served" && t.Status != "Cancelled")) continue;
             var ticket = new KitchenTicket
             {
                 OrderId = orderId,

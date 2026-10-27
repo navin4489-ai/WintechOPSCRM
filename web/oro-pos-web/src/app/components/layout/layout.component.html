@@ -2,7 +2,7 @@
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">O</div>
+      <img class="brand-mark" src="oro-logo.svg" alt="ORO POS"/>
       <div class="brand-text">
         <span class="brand-name">ORO POS</span>
         <span class="brand-tag">Restaurant Suite</span>
@@ -68,6 +68,7 @@
     <header class="topbar">
       <div class="crumb">ORO POS · {{ user?.outletName || 'Main Outlet' }}</div>
       <div class="topbar-right">
+        <button type="button" (click)="passwordDialog = true">Change password</button>
         <span class="clock">{{ now | date:'EEEE, d MMM y' }}</span>
         <span class="env-pill">● Live</span>
       </div>
@@ -79,3 +80,13 @@
 </div>
 
 <app-toast></app-toast>
+@if (passwordDialog) {
+  <div style="position:fixed;inset:0;background:#08122b99;z-index:300;display:grid;place-items:center;padding:20px">
+    <form class="panel" style="width:min(440px,100%)" (ngSubmit)="changePassword()">
+      <h2>Change password</h2><p>Use 12+ characters, upper/lowercase and a number. This signs out all sessions.</p>
+      <label>Current password<input type="password" name="currentPassword" [(ngModel)]="currentPassword" autocomplete="current-password" required/></label>
+      <label>New password<input type="password" name="newPassword" [(ngModel)]="newPassword" autocomplete="new-password" minlength="12" required/></label>
+      <div style="display:flex;gap:12px;margin-top:20px"><button type="button" (click)="passwordDialog = false; currentPassword = ''; newPassword = ''" [disabled]="changing">Cancel</button><button type="submit" [disabled]="changing">Update & sign out</button></div>
+    </form>
+  </div>
+}

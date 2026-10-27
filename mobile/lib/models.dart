@@ -193,12 +193,16 @@ class User {
   final String username;
   final String roleName;
   final List<String> permissions;
+  final int? outletId;
+  final String? outletName;
 
   User({
     required this.id,
     required this.username,
     required this.roleName,
     required this.permissions,
+    this.outletId,
+    this.outletName,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -207,6 +211,8 @@ class User {
       username: json['username'],
       roleName: json['roleName'] ?? '',
       permissions: List<String>.from(json['permissions'] ?? []),
+      outletId: json['outletId'],
+      outletName: json['outletName'],
     );
   }
 }

@@ -34,19 +34,13 @@ export class ReportsComponent implements OnInit {
 
   exportReport() {
     const outletId = this.auth.getCurrentUser()?.outletId;
-    this.api.getSalesReport(outletId).subscribe((res: ApiResponse<any[]>) => {
-      if (res.success) {
-        let csv = 'Group,Orders,Gross (INR),Net (INR),Cash (INR),Card (INR)\n';
-        (res.data || []).forEach((r: any) => {
-          csv += `${r.groupKey},${r.orderCount},${r.grossSales},${r.netSales},${r.cash},${r.card}\n`;
-        });
-        const blob = new Blob([csv], { type: 'text/csv' });
+    this.api.exportSales(outletId).subscribe(blob => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = 'sales_report.csv';
         a.click();
-      }
+        window.URL.revokeObjectURL(url);
     });
   }
 }

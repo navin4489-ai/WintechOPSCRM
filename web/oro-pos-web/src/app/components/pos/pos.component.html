@@ -5,6 +5,7 @@
       <p class="page-subtitle">{{ user?.username }} · {{ outlet?.name || 'Main Outlet' }}</p>
     </div>
     <div class="legend">
+      <button (click)="showNewSale = true" [disabled]="tableLoading || savingItem || processing">New takeaway / retail sale</button>
       <span class="lg"><i class="dot free"></i> Free</span>
       <span class="lg"><i class="dot occupied"></i> Occupied</span>
       <span class="lg"><i class="dot selected"></i> Selected</span>
@@ -66,6 +67,7 @@
         </button>
         <button class="btn-ghost" (click)="openDiscountModal()" [disabled]="!orderItems.length || tableLoading || savingItem">Discount</button>
         <button class="btn-danger" (click)="voidOrder()" [disabled]="!currentOrder || tableLoading || savingItem">Void</button>
+        <button (click)="showTransfer = true" [disabled]="!currentOrder || tableLoading || savingItem">Transfer</button>
       </div>
     </section>
 
@@ -156,7 +158,7 @@
       </div>
 
       <div class="form-group">
-        <label>Reason (optional)</label>
+        <label>Reason (required)</label>
         <input type="text" [(ngModel)]="discountReason" placeholder="e.g. Promo, loyalty, manager comp" />
       </div>
 
@@ -164,13 +166,29 @@
         <span>New total after discount + GST</span>
         <strong>{{ previewTotal | inr }}</strong>
       </div>
+      @if (needsApproval) {<label>Approving manager<input [(ngModel)]="approverUsername" autocomplete="off"/></label><label>Manager password (not saved)<input type="password" [(ngModel)]="approverPassword" autocomplete="off"/></label>}
     </div>
 
     <div class="modal-foot">
-      <button class="secondary" (click)="closeDiscount()">Cancel</button>
+      <button class="secondary" (click)="closeDiscount(); approverUsername = ''; approverPassword = ''">Cancel</button>
       <button class="btn-primary" (click)="applyDiscount()" [disabled]="applyingDiscount || !discountValue">
         @if (applyingDiscount) { Applying… } @else { Apply Discount }
       </button>
     </div>
   </div>
 </div>
+
+@if (showNewSale) {
+  <div class="modal-backdrop"><form class="modal" (ngSubmit)="createOrderForTable(undefined, serviceType)"><div class="modal-head"><h3>New sale</h3></div><div class="modal-body"><label>Service type<select name="serviceType" [(ngModel)]="serviceType"><option value="Takeaway">Takeaway</option><option value="QuickService">Quick service</option><option value="Retail">Retail</option></select></label><p>An open shift is required.</p></div><div class="modal-foot"><button type="button" (click)="showNewSale = false">Cancel</button><button type="submit" [disabled]="tableLoading">Start order</button></div></form></div>
+}
+@if (showVoid) {
+  <div class="modal-backdrop"><form class="modal" (ngSubmit)="confirmVoid()"><div class="modal-head"><h3>Void order</h3></div><div class="modal-body"><label>Reason<input name="voidReason" [(ngModel)]="voidReason" required maxlength="500"/></label>
+    @if (needsApproval) {<label>Approving manager<input name="approverUsername" [(ngModel)]="approverUsername" required autocomplete="off"/></label><label>Manager password (not saved)<input type="password" name="approverPassword" [(ngModel)]="approverPassword" required autocomplete="off"/></label>}
+    <p>Unpaid orders only. Settled sales require a refund.</p></div><div class="modal-foot"><button type="button" (click)="showVoid = false; approverUsername = ''; approverPassword = ''" [disabled]="savingItem">Cancel</button><button class="btn-danger" type="submit" [disabled]="savingItem">Confirm void</button></div></form></div>
+}
+@if (showTransfer) {
+  <div class="modal-backdrop"><form class="modal" (ngSubmit)="transfer()"><div class="modal-head"><h3>Transfer table</h3></div><div class="modal-body"><label>Free destination table<select name="transferTableId" [(ngModel)]="transferTableId" required><option [ngValue]="null">Choose a table</option>@for (t of freeTables; track t.id) {<option [ngValue]="t.id">Table {{ t.tableNumber }}</option>}</select></label></div><div class="modal-foot"><button type="button" (click)="showTransfer = false">Cancel</button><button type="submit" [disabled]="savingItem || !transferTableId">Transfer</button></div></form></div>
+}
+@if (productToAdd) {
+  <div class="modal-backdrop"><form class="modal" (ngSubmit)="confirmAddItem()"><div class="modal-head"><h3>{{ productToAdd.name }}</h3></div><div class="modal-body"><label>Quantity<input type="number" name="itemQuantity" [(ngModel)]="itemQuantity" min="1" max="999" step="1" required/></label><label>Kitchen notes<input name="itemNotes" [(ngModel)]="itemNotes" maxlength="500"/></label>@for(g of productToAdd.modifierGroups; track g.id) {<h4>{{g.name}} {{g.isRequired ? '(required)' : ''}}</h4>@for(o of g.options; track o.id) {<label><input type="checkbox" [name]="'modifier_' + o.id" [(ngModel)]="modifiers[o.id]"/> {{o.name}} (+{{o.priceImpact | inr}})</label>}}</div><div class="modal-foot"><button type="button" (click)="productToAdd = null" [disabled]="savingItem">Cancel</button><button type="submit" [disabled]="savingItem">Add to bill</button></div></form></div>
+}

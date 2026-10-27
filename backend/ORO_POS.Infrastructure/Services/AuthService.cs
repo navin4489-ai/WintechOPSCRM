@@ -43,6 +43,7 @@ public class AuthService : IAuthService
             new(ClaimTypes.Role, user.Role?.Name ?? string.Empty),
             new("OutletId", user.OutletId?.ToString() ?? string.Empty),
             new("Permissions", string.Join(",", permissions)),
+            new("SecurityStamp", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(user.PasswordHash)))),
         };
 
         var token = GenerateToken(claims);
@@ -79,7 +80,7 @@ public class AuthService : IAuthService
 
     public async Task<bool> ValidateOutletAccessAsync(int userId, int outletId)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
+        var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
         if (user == null) return false;
         // Owner/admin can access all outlets; others restricted to their outlet
         if (user.Role != null && user.Role.Name == "Owner") return true;
@@ -116,8 +117,9 @@ public class AuthService : IAuthService
 public class PermissionSeedService
 {
     private readonly AppDbContext _db;
+    private readonly IConfiguration _configuration;
 
-    public PermissionSeedService(AppDbContext db) => _db = db;
+    public PermissionSeedService(AppDbContext db, IConfiguration configuration) { _db = db; _configuration = configuration; }
 
     public async Task SeedRolesAndPermissionsAsync()
     {
@@ -160,14 +162,25 @@ public class PermissionSeedService
     public async Task SeedDefaultOutletAndAdminAsync()
     {
         if (await _db.Outlets.AnyAsync()) return;
+        var adminPassword = _configuration["INITIAL_ADMIN_PASSWORD"];
+        if (string.IsNullOrEmpty(adminPassword))
+        {
+            if (_configuration["ASPNETCORE_ENVIRONMENT"] == "Production")
+                throw new InvalidOperationException("INITIAL_ADMIN_PASSWORD is required when provisioning a new production database.");
+            adminPassword = "Admin@123";
+        }
+        if (adminPassword != "Admin@123" && adminPassword.Length < 12)
+            throw new InvalidOperationException("Initial admin password must contain at least 12 characters.");
+        if (_configuration["ASPNETCORE_ENVIRONMENT"] == "Production" && adminPassword.Length < 12)
+            throw new InvalidOperationException("Production initial admin password must contain at least 12 characters.");
 
         var outlet = new Outlet
         {
             Name = "Main Outlet",
             Address = "123 Main Street",
             Phone = "+1-555-0100",
-            Timezone = "UTC",
-            Currency = "USD",
+            Timezone = "Asia/Kolkata",
+            Currency = "INR",
             IsOperating = true,
             IsDeleted = false
         };
@@ -179,7 +192,7 @@ public class PermissionSeedService
         {
             Username = "admin",
             Email = "admin@oropos.com",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
             RoleId = ownerRole.Id,
             OutletId = outlet.Id,
             IsActive = true
@@ -207,6 +220,7 @@ public class PermissionSeedService
             await _db.SaveChangesAsync();
         }
 
+        if (!string.Equals(_configuration["SEED_DEMO_DATA"], "true", StringComparison.OrdinalIgnoreCase)) return;
         await SeedCategoriesAndProductsAsync(outlet.Id);
         await SeedOpeningStockAsync(outlet.Id);
         await SeedZonesAndTablesAsync(outlet.Id);

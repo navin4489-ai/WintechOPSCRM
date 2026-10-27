@@ -1,0 +1,1101 @@
+import 'package:flutter/material.dart';
+
+import 'api_service.dart';
+import 'brand.dart';
+import 'currency.dart';
+import 'ui_helpers.dart';
+import 'pos_screen.dart';
+
+class OperationsScreen extends StatefulWidget {
+  final ApiService api;
+  final String module;
+  final void Function(String) onNavigate;
+  const OperationsScreen({
+    super.key,
+    required this.api,
+    required this.module,
+    required this.onNavigate,
+  });
+  @override
+  State<OperationsScreen> createState() => _OperationsScreenState();
+}
+
+class _OperationsScreenState extends State<OperationsScreen> {
+  bool loading = true, busy = false;
+  String? error;
+  dynamic data;
+  dynamic shift;
+  List<dynamic> rows = [];
+  int page = 1;
+  String filter = '', reportQuery = '';
+  ApiService get api => widget.api;
+  String get module => widget.module;
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final outlet = api.outletId;
+      final result = await api.request(switch (module) {
+        'Overview' =>
+          api.can('ViewReports')
+              ? '/reports/dashboard?outletId=$outlet'
+              : '/tables/outlet/$outlet',
+        'Orders' =>
+          '/orders?outletId=$outlet&page=$page&pageSize=20&search=${Uri.encodeQueryComponent(filter)}',
+        'Kitchen' => '/kitchentickets?outletId=$outlet',
+        'Shifts' => '/shifts?outletId=$outlet&page=$page&pageSize=20',
+        'Tables' => '/tables/outlet/$outlet',
+        'Catalogue' => '/products?outletId=$outlet&availableOnly=false',
+        'Inventory' => '/inventory/stock?outletId=$outlet',
+        'Reports' => '/reports/sales?outletId=$outlet$reportQuery',
+        'Audit log' => '/reports/audit?outletId=$outlet&page=$page&pageSize=20',
+        'Staff' => '/users',
+        _ => throw const ApiException('Unknown module'),
+      });
+      dynamic open;
+      if (module == 'Shifts' || module == 'Overview') {
+        open = await api.request('/shifts/open?outletId=$outlet');
+      }
+      if (mounted) {
+        setState(() {
+          data = result;
+          shift = open;
+          rows = result is List
+              ? result
+              : result is Map && result['items'] is List
+              ? result['items']
+              : [];
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> run(Future<void> Function() task) async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      await task();
+      await load();
+    } catch (e) {
+      if (mounted) notify(context, e);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> openShift() async {
+    final value = await askForm(context, 'Open cash shift', [
+      const FormFieldSpec(
+        'openingFloat',
+        'Opening cash float (INR)',
+        number: true,
+        initial: '0',
+      ),
+    ]);
+    if (value == null) return;
+    if (money(value['openingFloat']) < 0) {
+      if (mounted) notify(context, 'Float cannot be negative.');
+      return;
+    }
+    await run(() async {
+      await api.request(
+        '/shifts/open',
+        method: 'POST',
+        body: {...value, 'userId': api.user!.id, 'outletId': api.outletId},
+      );
+    });
+  }
+
+  Future<void> closeShift() async {
+    final value = await askForm(
+      context,
+      'Close shift',
+      [
+        const FormFieldSpec(
+          'countedCash',
+          'Counted cash in drawer (INR)',
+          number: true,
+        ),
+      ],
+      warning: 'Count physical cash first. Cash variance will be stored in the Z-report.',
+      submit: 'Close shift',
+    );
+    if (value == null) return;
+    await run(() async {
+      final result = await api.request(
+        '/shifts/close',
+        method: 'POST',
+        body: {...value, 'shiftId': shift['id']},
+      );
+      if (mounted) {
+        notify(
+          context,
+          'Shift closed · variance ${formatInr(money(result['variance']))}',
+        );
+      }
+    });
+  }
+
+  Future<void> zReport(dynamic id) async {
+    await run(() async {
+      final report = await api.request('/shifts/$id/z-report');
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Z-report · shift $id'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${report['userName']} · ${dateLabel(report['openTime'])}',
+                ),
+                ...{
+                  'Gross sales': report['grossSales'],
+                  'Discounts': report['discounts'],
+                  'GST': report['taxes'],
+                  'Net sales': report['netSales'],
+                  'Opening float': report['openingFloat'],
+                  'Expected cash': report['cashExpected'],
+                  'Counted cash': report['cashCounted'],
+                  'Variance': report['variance'],
+                }.entries.map(
+                  (e) => ListTile(
+                    dense: true,
+                    title: Text(e.key),
+                    trailing: Text(
+                      formatInr(money(e.value)),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Future<void> inventoryMovement() async {
+    final values = await askForm(context, 'Record stock movement', [
+      FormFieldSpec(
+        'productId',
+        'Product',
+        choices: {
+          for (final p in rows) '${p['productId']}': '${p['productName']}',
+        },
+      ),
+      const FormFieldSpec(
+        'movementType',
+        'Movement',
+        initial: 'Receipt',
+        choices: {
+          'Receipt': 'Receipt / stock in',
+          'Waste': 'Waste / spoilage',
+          'Adjustment': 'Signed adjustment (+ / −)',
+          'PhysicalCount': 'Physical count (actual stock on hand)',
+        },
+      ),
+      const FormFieldSpec('quantity', 'Quantity', number: true),
+      const FormFieldSpec('location', 'Location', initial: 'Main store'),
+      const FormFieldSpec('batch', 'Batch / lot', optional: true),
+      const FormFieldSpec('source', 'Reference / reason'),
+    ]);
+    if (values == null) return;
+    values['productId'] = int.parse(values['productId']);
+    await run(() async {
+      await api.request('/inventory/movement', method: 'POST', body: values);
+    });
+  }
+
+  Future<void> inventoryHistory() async {
+    await run(() async {
+      final entries = await api.request(
+        '/inventory/movements?outletId=${api.outletId}&pageSize=100',
+      );
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Latest stock movements'),
+          content: SizedBox(
+            width: 520,
+            height: 440,
+            child: ListView(
+              children: (entries as List)
+                  .map(
+                    (e) => ListTile(
+                      title: Text('${e['productName']} · ${e['movementType']}'),
+                      subtitle: Text(
+                        '${dateLabel(e['createdAt'])}\n${e['source'] ?? ''}',
+                      ),
+                      trailing: Text('${e['quantity']}'),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Future<void> addRecipe() async {
+    final choices = {
+      for (final p in rows) '${p['productId']}': '${p['productName']}',
+    };
+    final values = await askForm(context, 'Recipe / ingredient mapping', [
+      FormFieldSpec('productId', 'Menu product', choices: choices),
+      FormFieldSpec('ingredientId', 'Ingredient product', choices: choices),
+      const FormFieldSpec(
+        'quantity',
+        'Ingredient quantity per sale',
+        number: true,
+      ),
+      const FormFieldSpec('unit', 'Unit', initial: 'unit'),
+    ]);
+    if (values == null) return;
+    for (final k in ['productId', 'ingredientId']) {
+      values[k] = int.parse(values[k]);
+    }
+    if (values['productId'] == values['ingredientId'] ||
+        money(values['quantity']) <= 0) {
+      if (mounted) {
+        notify(
+          context,
+          'Choose a different ingredient and a positive quantity.',
+        );
+      }
+      return;
+    }
+    await run(() async {
+      await api.request('/recipes', method: 'POST', body: values);
+    });
+  }
+
+  Future<void> addProduct() async {
+    await run(() async {
+      final categories =
+          await api.request('/categories/outlet/${api.outletId}') as List;
+      if (!mounted) return;
+      final value = await askForm(context, 'Create product', [
+        const FormFieldSpec('name', 'Product name'),
+        const FormFieldSpec('sku', 'Unique SKU'),
+        const FormFieldSpec('barcode', 'Barcode', optional: true),
+        FormFieldSpec(
+          'categoryId',
+          'Category',
+          choices: {for (final c in categories) '${c['id']}': '${c['name']}'},
+        ),
+        const FormFieldSpec('price', 'Price (INR)', number: true),
+        const FormFieldSpec('description', 'Description', optional: true),
+      ]);
+      if (value == null) return;
+      value['categoryId'] = int.parse(value['categoryId']);
+      await api.request(
+        '/products',
+        method: 'POST',
+        body: {
+          ...value,
+          'outletId': api.outletId,
+          'isAvailable': true,
+          'taxClass': 'Standard',
+          'sortOrder': 0,
+        },
+      );
+    });
+  }
+
+  Future<void> addCategory() async {
+    final value = await askForm(context, 'Create category', [
+      const FormFieldSpec('name', 'Category name'),
+    ]);
+    if (value != null) {
+      await run(() async {
+        await api.request(
+          '/categories',
+          method: 'POST',
+          body: {...value, 'outletId': api.outletId, 'sortOrder': 0},
+        );
+      });
+    }
+  }
+
+  Future<void> addTable() async {
+    final value = await askForm(context, 'Create table', [
+      const FormFieldSpec('tableNumber', 'Table number'),
+      const FormFieldSpec('capacity', 'Seats', number: true, initial: '4'),
+    ]);
+    if (value != null) {
+      await run(() async {
+        await api.request(
+          '/tables',
+          method: 'POST',
+          body: {...value, 'outletId': api.outletId},
+        );
+      });
+    }
+  }
+
+  Future<void> staffForm([dynamic staff]) async {
+    await run(() async {
+      final roles = await api.request('/roles') as List;
+      if (!mounted) return;
+      final value = await askForm(
+        context,
+        staff == null ? 'Create staff account' : 'Edit staff account',
+        [
+          FormFieldSpec(
+            'username',
+            'Username',
+            initial: staff?['username'] ?? '',
+          ),
+          FormFieldSpec('email', 'Email', initial: staff?['email'] ?? ''),
+          FormFieldSpec(
+            'password',
+            staff == null
+                ? 'Password (12+ characters)'
+                : 'New password (leave blank to keep)',
+            secret: true,
+            optional: staff != null,
+          ),
+          FormFieldSpec(
+            'roleId',
+            'Role',
+            initial:
+                '${roles.where((r) => r['name'] == staff?['roleName']).firstOrNull?['id'] ?? ''}',
+            choices: {for (final r in roles) '${r['id']}': '${r['name']}'},
+          ),
+          if (staff != null)
+            FormFieldSpec(
+              'active',
+              'Account status',
+              initial: staff['isActive'] == true ? 'yes' : 'no',
+              choices: const {'yes': 'Active', 'no': 'Inactive'},
+            ),
+        ],
+      );
+      if (value == null) return;
+      if ((value['password'] as String).isNotEmpty &&
+          (value['password'] as String).length < 12) {
+        throw const ApiException('Use a password of at least 12 characters.');
+      }
+      if (value['password'] == '') value.remove('password');
+      value['roleId'] = int.parse(value['roleId']);
+      value['outletId'] = api.outletId;
+      if (staff != null) value['isActive'] = value.remove('active') == 'yes';
+      await api.request(
+        staff == null ? '/users' : '/users/${staff['id']}',
+        method: staff == null ? 'POST' : 'PUT',
+        body: value,
+      );
+    });
+  }
+
+  Future<void> showOrder(dynamic summary) async {
+    await run(() async {
+      final detail = Map<String, dynamic>.from(
+        await api.request('/orders/${summary['id']}'),
+      );
+      if (!mounted) return;
+      if (detail['status'] == 'Open' && api.can('CreateOrder')) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text('${detail['orderNumber']}')),
+              body: PosScreen(api: api, initialOrder: detail),
+            ),
+          ),
+        );
+        return;
+      }
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('${detail['orderNumber']}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${detail['status']} · ${dateLabel(detail['createdAt'])}'),
+                ...((detail['orderItems'] as List?) ?? []).map(
+                  (i) => ListTile(
+                    title: Text('${i['quantity']} × ${i['productName']}'),
+                    trailing: Text(formatInr(money(i['lineTotal']))),
+                  ),
+                ),
+                Text(
+                  'GST ${formatInr(money(detail['taxAmount']))} · Total ${formatInr(money(detail['totalAmount']))}',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done'),
+            ),
+            if (api.can('EditOrder') || api.can('ViewReports'))
+              TextButton(
+                onPressed: () async {
+                  try {
+                    await printReceipt(api, detail);
+                  } catch (e) {
+                    if (ctx.mounted) notify(ctx, e);
+                  }
+                },
+                child: const Text('Print receipt'),
+              ),
+            if (detail['status'] == 'Closed' && api.can('RefundOrder'))
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  refund(detail);
+                },
+                child: const Text('Record refund'),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Future<void> refund(Json detail) async {
+    final value = await askForm(
+      context,
+      'Record full refund',
+      [
+        ...approvalFields(api),
+        const FormFieldSpec('reason', 'Reason'),
+        const FormFieldSpec('reference', 'Bank / manual refund reference'),
+        const FormFieldSpec(
+          'restock',
+          'Return physical stock?',
+          initial: 'no',
+          choices: {'no': 'No (food / waste)', 'yes': 'Yes, goods returned'},
+        ),
+      ],
+      warning: 'First return the money externally. This records the full refund; it does not send money through a bank. Cash refunds require an open shift.',
+      submit: 'Record full refund',
+    );
+    if (value == null) return;
+    value['restock'] = value['restock'] == 'yes';
+    await run(() async {
+      await api.request(
+        '/orders/${detail['id']}/refund',
+        method: 'POST',
+        body: value,
+      );
+    });
+  }
+
+  Future<void> filterReport() async {
+    final value = await askForm(context, 'Sales report filters', [
+      const FormFieldSpec('from', 'From date (YYYY-MM-DD)', optional: true),
+      const FormFieldSpec('to', 'To date (YYYY-MM-DD)', optional: true),
+      const FormFieldSpec(
+        'groupBy',
+        'Group by',
+        initial: 'day',
+        choices: {'day': 'Day', 'employee': 'Employee', 'outlet': 'Outlet'},
+      ),
+    ]);
+    if (value == null) return;
+    final params = <String, String>{'groupBy': value['groupBy']};
+    for (final pair in [('from', 'fromDate'), ('to', 'toDate')]) {
+      if (value[pair.$1] == '') continue;
+      final date = DateTime.tryParse(value[pair.$1]);
+      if (date == null) {
+        if (mounted) notify(context, 'Enter dates in YYYY-MM-DD format.');
+        return;
+      }
+      params[pair.$2] =
+          (pair.$1 == 'to'
+                  ? date
+                        .add(const Duration(days: 1))
+                        .subtract(const Duration(microseconds: 1))
+                  : date)
+              .toUtc()
+              .toIso8601String();
+    }
+    reportQuery = '&${Uri(queryParameters: params).query}';
+    await load();
+  }
+
+  Widget overview() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [navy, Color(0xff254f7d)]),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const OroLogo(size: 48),
+            const SizedBox(height: 20),
+            Text(
+              'Hello, ${api.user?.username}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              '${api.user?.outletName ?? 'Your outlet'} · ${api.user?.roleName}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              shift == null
+                  ? 'No open cash shift'
+                  : 'Shift #${shift['id']} is active',
+              style: const TextStyle(color: gold, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: () =>
+                  widget.onNavigate(shift == null ? 'Shifts' : 'Point of sale'),
+              child: Text(
+                shift == null ? 'Open your shift' : 'Go to point of sale',
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
+      if (data is Map)
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            metric(
+              'Sales today',
+              formatInr(money(data['todaySales'])),
+              Icons.trending_up,
+            ),
+            metric(
+              'Cash collected',
+              formatInr(money(data['todayCash'])),
+              Icons.payments_outlined,
+            ),
+            metric(
+              'Orders today',
+              '${data['todayOrders']}',
+              Icons.receipt_long,
+            ),
+            metric(
+              'Occupied tables',
+              '${data['openTables']}',
+              Icons.table_restaurant,
+            ),
+            metric(
+              'Kitchen queue',
+              '${data['pendingKitchenTickets']}',
+              Icons.soup_kitchen,
+            ),
+            metric(
+              'Low stock',
+              '${data['lowStockItems']}',
+              Icons.inventory_2_outlined,
+            ),
+          ],
+        ),
+      const SizedBox(height: 24),
+      const Text(
+        'Your workspace',
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final m in [
+            'Point of sale',
+            'Orders',
+            'Kitchen',
+            'Shifts',
+            'Tables',
+            'Catalogue',
+            if (api.can('ManageInventory')) 'Inventory',
+            if (api.can('ViewReports')) 'Reports',
+          ])
+            SizedBox(
+              width: 155,
+              child: Card(
+                child: ListTile(
+                  title: Text(
+                    m,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward, size: 18),
+                  onTap: () => widget.onNavigate(m),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ],
+  );
+  Widget metric(String label, String value, IconData icon) => SizedBox(
+    width: 175,
+    child: Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: navy),
+            const SizedBox(height: 18),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
+            ),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.blueGrey, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  Widget record(dynamic row) {
+    final r = Map<String, dynamic>.from(row);
+    return switch (module) {
+      'Orders' => ListTile(
+        leading: const Icon(Icons.receipt_long_outlined),
+        title: Text('${r['orderNumber']}'),
+        subtitle: Text(
+          '${r['status']} · ${r['serviceType']} · ${dateLabel(r['createdAt'])}',
+        ),
+        trailing: Text(
+          formatInr(money(r['totalAmount'])),
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        onTap: busy ? null : () => showOrder(r),
+      ),
+      'Tables' => ListTile(
+        leading: Icon(
+          Icons.table_restaurant,
+          color: r['hasOpenOrder'] == true ? Colors.deepOrange : Colors.teal,
+        ),
+        title: Text('Table ${r['tableNumber']}'),
+        subtitle: Text(
+          '${r['capacity']} seats · ${r['zoneName'] ?? 'Main floor'}',
+        ),
+        trailing: Text(r['hasOpenOrder'] == true ? 'Occupied' : 'Free'),
+      ),
+      'Catalogue' => ListTile(
+        leading: CircleAvatar(
+          backgroundColor: gold.withValues(alpha: .15),
+          child: Text('${r['name']}'.substring(0, 1)),
+        ),
+        title: Text('${r['name']}'),
+        subtitle: Text(
+          '${r['sku']} · ${r['categoryName']} · ${r['isAvailable'] == true ? 'Available' : 'Unavailable'}',
+        ),
+        trailing: Text(
+          formatInr(money(r['price'])),
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      'Inventory' => ListTile(
+        leading: Icon(
+          Icons.inventory_2_outlined,
+          color: r['isLowStock'] == true ? Colors.red : Colors.teal,
+        ),
+        title: Text('${r['productName']}'),
+        subtitle: Text(
+          '${r['sku']} · ${r['isLowStock'] == true ? 'LOW STOCK' : 'Stock available'}',
+        ),
+        trailing: Text(
+          '${r['currentStock']}',
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+        ),
+      ),
+      'Staff' => ListTile(
+        leading: const Icon(Icons.person_outline),
+        title: Text('${r['username']}'),
+        subtitle: Text(
+          '${r['roleName']} · ${r['email']}\n${r['isActive'] == true ? 'Active' : 'Inactive'}',
+        ),
+        trailing: const Icon(Icons.edit_outlined),
+        onTap: busy ? null : () => staffForm(r),
+      ),
+      'Audit log' => ListTile(
+        leading: const Icon(Icons.policy_outlined),
+        title: Text('${r['action']} · ${r['entity']} #${r['entityId']}'),
+        subtitle: Text(
+          '${r['actorName']} · ${dateLabel(r['createdAt'])}\n${r['reason'] ?? ''}',
+        ),
+      ),
+      'Shifts' => ListTile(
+        leading: const Icon(Icons.schedule),
+        title: Text('Shift #${r['id']} · ${r['userName']}'),
+        subtitle: Text(
+          '${r['status']} · ${dateLabel(r['openTime'])}\nFloat ${formatInr(money(r['openingFloat']))} · Variance ${formatInr(money(r['variance']))}',
+        ),
+        trailing: api.can('ViewReports')
+            ? TextButton(
+                onPressed: busy ? null : () => zReport(r['id']),
+                child: const Text('Z-report'),
+              )
+            : null,
+      ),
+      'Reports' => Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${r['groupKey']} · ${r['orderCount']} orders',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 20,
+              runSpacing: 8,
+              children: [
+                for (final key in [
+                  'grossSales',
+                  'discounts',
+                  'taxes',
+                  'netSales',
+                  'cash',
+                  'card',
+                  'digitalWallet',
+                ])
+                  Text('$key: ${formatInr(money(r[key]))}'),
+              ],
+            ),
+          ],
+        ),
+      ),
+      'Kitchen' => kitchenCard(r),
+      _ => const SizedBox.shrink(),
+    };
+  }
+
+  Widget kitchenCard(Json ticket) {
+    final age = DateTime.now()
+        .difference(DateTime.parse(ticket['createdAt']).toLocal())
+        .inMinutes;
+    const next = {
+      'New': 'Accepted',
+      'Accepted': 'InProgress',
+      'InProgress': 'Ready',
+      'Ready': 'Served',
+    };
+    final status = '${ticket['status']}';
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${ticket['orderNumber']}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Chip(
+                label: Text('$age min'),
+                backgroundColor: age >= 15 ? const Color(0xffffe2de) : canvas,
+              ),
+            ],
+          ),
+          Text(
+            '${ticket['stationName']} · Table ${ticket['tableNumber'] ?? 'Takeaway'} · $status',
+          ),
+          const Divider(height: 24),
+          ...((ticket['items'] as List?) ?? []).map(
+            (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '${i['quantity']} × ${i['productName']}${i['notes'] == null || i['notes'] == '' ? '' : '\n  ${i['notes']}'}',
+              ),
+            ),
+          ),
+          if (next.containsKey(status))
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () => run(
+                      () => api.updateTicketStatus(ticket['id'], next[status]!),
+                    ),
+              child: Text('Mark ${next[status]}'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> get tools => switch (module) {
+    'Tables' =>
+      api.can('ManageSettings')
+          ? [
+              FilledButton.icon(
+                onPressed: busy ? null : addTable,
+                icon: const Icon(Icons.add),
+                label: const Text('Add table'),
+              ),
+            ]
+          : [],
+    'Catalogue' =>
+      api.can('ManageSettings')
+          ? [
+              FilledButton.icon(
+                onPressed: busy ? null : addProduct,
+                icon: const Icon(Icons.add),
+                label: const Text('Product'),
+              ),
+              OutlinedButton(
+                onPressed: busy ? null : addCategory,
+                child: const Text('Category'),
+              ),
+            ]
+          : [],
+    'Inventory' => [
+      FilledButton.icon(
+        onPressed: busy ? null : inventoryMovement,
+        icon: const Icon(Icons.add),
+        label: const Text('Movement'),
+      ),
+      OutlinedButton(
+        onPressed: busy ? null : inventoryHistory,
+        child: const Text('Ledger'),
+      ),
+      OutlinedButton(
+        onPressed: busy ? null : addRecipe,
+        child: const Text('Recipe'),
+      ),
+    ],
+    'Staff' => [
+      FilledButton.icon(
+        onPressed: busy ? null : () => staffForm(),
+        icon: const Icon(Icons.person_add_outlined),
+        label: const Text('Add staff'),
+      ),
+    ],
+    'Reports' => [
+      OutlinedButton.icon(
+        onPressed: busy ? null : filterReport,
+        icon: const Icon(Icons.filter_list),
+        label: const Text('Filters'),
+      ),
+      if (api.can('ExportReports'))
+        FilledButton.icon(
+          onPressed: busy ? null : () => run(() => printSales(rows)),
+          icon: const Icon(Icons.print_outlined),
+          label: const Text('Print / PDF'),
+        ),
+    ],
+    _ => [],
+  };
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+    if (error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 48),
+              const SizedBox(height: 16),
+              Text(error!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: load, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        if (busy) const LinearProgressIndicator(minHeight: 3),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: load,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (module == 'Overview')
+                  overview()
+                else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          module,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Refresh',
+                        onPressed: busy ? null : load,
+                        icon: const Icon(Icons.refresh),
+                      ),
+                    ],
+                  ),
+                  if (tools.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Wrap(spacing: 8, runSpacing: 8, children: tools),
+                    ),
+                  if (module == 'Orders')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Search order or table · press enter',
+                          prefixIcon: Icon(Icons.search),
+                        ),
+                        onSubmitted: (v) {
+                          filter = v;
+                          page = 1;
+                          load();
+                        },
+                      ),
+                    ),
+                  if (module == 'Shifts')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Card(
+                        color: navy,
+                        child: Padding(
+                          padding: const EdgeInsets.all(22),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                shift == null
+                                    ? 'Start your day'
+                                    : 'Shift #${shift['id']} active',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                shift == null
+                                    ? 'Open a shift before taking orders.'
+                                    : 'Float ${formatInr(money(shift['openingFloat']))} · ${dateLabel(shift['openTime'])}',
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              const SizedBox(height: 18),
+                              if (shift == null || api.can('CloseShift'))
+                                FilledButton.tonal(
+                                  onPressed: busy
+                                      ? null
+                                      : shift == null
+                                      ? openShift
+                                      : closeShift,
+                                  child: Text(
+                                    shift == null
+                                        ? 'Open shift'
+                                        : 'Count cash & close',
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (rows.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Center(
+                        child: Text('No records found. Pull down to refresh.'),
+                      ),
+                    ),
+                  ...rows
+                      .where(
+                        (r) =>
+                            module != 'Kitchen' ||
+                            !['Served', 'Cancelled'].contains(r['status']),
+                      )
+                      .map(
+                        (r) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Card(child: record(r)),
+                        ),
+                      ),
+                  if (['Orders', 'Audit log', 'Shifts'].contains(module))
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: page > 1 && !busy
+                              ? () {
+                                  page--;
+                                  load();
+                                }
+                              : null,
+                          child: const Text('Previous'),
+                        ),
+                        Text('Page $page'),
+                        TextButton(
+                          onPressed: rows.length == 20 && !busy
+                              ? () {
+                                  page++;
+                                  load();
+                                }
+                              : null,
+                          child: const Text('Next'),
+                        ),
+                      ],
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

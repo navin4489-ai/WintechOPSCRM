@@ -74,6 +74,9 @@ public class MenuService : IMenuService
 
     public async Task<CategoryDto> CreateCategoryAsync(CreateCategoryRequest request, int userId)
     {
+        if (string.IsNullOrWhiteSpace(request.Name)) throw new InvalidOperationException("Category name is required.");
+        if (await _db.Categories.AnyAsync(c => c.OutletId == request.OutletId && c.Name == request.Name.Trim()))
+            throw new InvalidOperationException("Category name already exists in this outlet.");
         var cat = new Category { OutletId = request.OutletId, Name = request.Name, SortOrder = request.SortOrder };
         _db.Categories.Add(cat);
         await _db.SaveChangesAsync();
@@ -93,6 +96,14 @@ public class MenuService : IMenuService
 
     public async Task<ProductDto> CreateProductAsync(CreateProductRequest request, int userId)
     {
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.SKU) || request.Price < 0)
+            throw new InvalidOperationException("Name, SKU and a non-negative price are required.");
+        if (await _db.Products.AnyAsync(p => p.OutletId == request.OutletId && p.SKU == request.SKU))
+            throw new InvalidOperationException("SKU already exists in this outlet.");
+        if (request.CategoryId.HasValue && !await _db.Categories.AnyAsync(c => c.Id == request.CategoryId && c.OutletId == request.OutletId))
+            throw new InvalidOperationException("Category must belong to this outlet.");
+        var groupIds = await _db.ModifierGroups.Where(g => g.OutletId == request.OutletId && request.ModifierGroupIds.Contains(g.Id)).Select(g => g.Id).ToListAsync();
+        if (request.ModifierGroupIds.Except(groupIds).Any()) throw new InvalidOperationException("Modifier groups must belong to this outlet.");
         var product = new Product
         {
             OutletId = request.OutletId, CategoryId = request.CategoryId, SKU = request.SKU,
@@ -193,6 +204,10 @@ public class TableService : ITableService
 
     public async Task<TableDto> CreateTableAsync(CreateTableRequest request, int userId)
     {
+        if (string.IsNullOrWhiteSpace(request.TableNumber) || request.Capacity < 1 || request.Capacity > 100)
+            throw new InvalidOperationException("A table number and capacity between 1 and 100 are required.");
+        if (await _db.Tables.AnyAsync(t => t.OutletId == request.OutletId && t.TableNumber == request.TableNumber))
+            throw new InvalidOperationException("Table number already exists in this outlet.");
         var table = new Table
         {
             OutletId = request.OutletId, ZoneId = request.ZoneId, TableNumber = request.TableNumber,

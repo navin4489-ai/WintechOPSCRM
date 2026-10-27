@@ -1,0 +1,28 @@
+<div class="page-header"><div><h1>{{ audit ? 'Audit log' : 'Orders & receipts' }}</h1><p>{{ audit ? 'Trace sensitive actions, reasons and operators.' : 'Find orders, review bills, print receipts and record authorized refunds.' }}</p></div><button (click)="load()" [disabled]="loading">Refresh</button></div>
+<section class="panel">
+  @if (!audit) { <form (ngSubmit)="page = 1; load()" class="search"><input name="search" [(ngModel)]="search" placeholder="Search order or table number"/><button type="submit" [disabled]="loading">Search</button></form> }
+  @if (loading) { <p role="status">Loading…</p> }
+  <div class="table-wrap"><table>
+    @if (audit) {
+      <thead><tr><th>When</th><th>Operator</th><th>Action</th><th>Record</th><th>Reason</th></tr></thead><tbody>@for (l of logs; track l.id) { <tr><td>{{ l.createdAt | date:'short' }}</td><td>{{ l.actorName }}</td><td>{{ l.action }}</td><td>{{ l.entity }} #{{ l.entityId }}</td><td>{{ l.reason || '—' }}</td></tr> }</tbody>
+    } @else {
+      <thead><tr><th>Order</th><th>Created</th><th>Service</th><th>Table</th><th>Status</th><th>Total</th><th></th></tr></thead><tbody>@for (o of rows; track o.id) { <tr><td>{{ o.orderNumber }}</td><td>{{ o.createdAt | date:'short' }}</td><td>{{ o.serviceType }}</td><td>{{ o.tableNumber || '—' }}</td><td><span class="badge neutral">{{ o.status }}</span></td><td>{{ o.totalAmount | inr }}</td><td><button (click)="detail(o.id)" [disabled]="busy">View bill</button></td></tr> }</tbody>
+    }
+  </table></div>
+  @if (!loading && !(audit ? logs.length : rows.length)) { <p>No records found.</p> }
+  <div class="pager"><button (click)="changePage(-1)" [disabled]="page === 1 || loading">Previous</button><span>Page {{ page }}</span><button (click)="changePage(1)" [disabled]="loading || (audit ? logs.length : rows.length) < 20">Next</button></div>
+</section>
+@if (selected) {
+  <div class="overlay"><section class="dialog" role="dialog" aria-modal="true" aria-label="Order bill">
+    <div class="panel-head"><h2>{{ selected.orderNumber }}</h2><button (click)="selected = null" [disabled]="busy" aria-label="Close bill">×</button></div>
+    <p>{{ selected.status }} · {{ selected.serviceType }} · {{ selected.createdAt | date:'short' }}</p>
+    <table><tbody>@for (i of selected.orderItems; track i.id) { <tr><td>{{ i.quantity }} × {{ i.productName }}</td><td>{{ i.lineTotal | inr }}</td></tr> }</tbody></table>
+    <div class="totals"><p>Subtotal <strong>{{ selected.subtotal | inr }}</strong></p><p>Discount <strong>{{ selected.discountAmount | inr }}</strong></p><p>GST <strong>{{ selected.taxAmount | inr }}</strong></p><h3>Total <strong>{{ selected.totalAmount | inr }}</strong></h3></div>
+    @if (refund) {
+      <form (ngSubmit)="submitRefund()"><p class="warning">Return the money externally first. This records a full refund, not a bank transfer. Cash refunds require an open shift.</p><label>Reason<input name="reason" [(ngModel)]="reason" required maxlength="500"/></label><label>Bank/manual refund reference<input name="reference" [(ngModel)]="reference" required maxlength="200"/></label><label><input type="checkbox" name="restock" [(ngModel)]="restock"/> Goods physically returned — restore stock</label>
+        @if (!can('ApproveManagerAction')) {<label>Approving manager<input name="approverUsername" [(ngModel)]="approverUsername" required autocomplete="off"/></label><label>Manager password (not saved)<input type="password" name="approverPassword" [(ngModel)]="approverPassword" required autocomplete="off"/></label>}
+        <button type="submit" class="btn-danger" [disabled]="busy">Record full refund</button></form>
+    }
+    <div class="actions"><button (click)="print()" [disabled]="busy">Print receipt</button>@if (selected.status === 'Closed' && can('RefundOrder')) { <button class="btn-danger" (click)="refund = !refund" [disabled]="busy">Refund</button> }</div>
+  </section></div>
+}

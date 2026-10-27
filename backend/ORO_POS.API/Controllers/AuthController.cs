@@ -15,6 +15,7 @@ public class AuthController : ControllerBase
     public AuthController(IAuthService auth) => _auth = auth;
 
     [HttpPost("login")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -36,6 +37,22 @@ public class AuthController : ControllerBase
         var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
         var can = await _auth.ValidatePermissionAsync(userId, Permission.ManageSettings);
         return Ok(new ApiResponse<object> { Success = true, Data = new { userId, canManageSettings = can } });
+    }
+
+    [HttpPost("password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, [FromServices] ORO_POS.Infrastructure.Data.AppDbContext db)
+    {
+        var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+        var user = await db.Users.FindAsync(userId);
+        if (user == null || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+            return BadRequest(new ApiResponse<object> { Success = false, Errors = new[] { "Current password is incorrect." } });
+        if (request.NewPassword.Length < 12 || !request.NewPassword.Any(char.IsUpper) || !request.NewPassword.Any(char.IsLower) || !request.NewPassword.Any(char.IsDigit) || request.NewPassword == request.CurrentPassword)
+            return BadRequest(new ApiResponse<object> { Success = false, Errors = new[] { "Use a different password with at least 12 characters, upper/lowercase letters and a number." } });
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        db.AuditLogs.Add(new ORO_POS.Core.Entities.AuditLog { ActorId = userId, Action = "ChangePassword", Entity = "User", EntityId = userId, Reason = "Self-service password rotation. All existing sessions revoked." });
+        await db.SaveChangesAsync();
+        return Ok(new ApiResponse<object> { Success = true, Data = new { signInAgain = true } });
     }
 
     [HttpPost("validate-permission")]

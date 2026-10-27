@@ -23,6 +23,12 @@ export class ApiService {
   private base = `${environment.apiUrl}`;
 
   constructor(private http: HttpClient) {}
+  changePassword(currentPassword: string, newPassword: string): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${this.base}/auth/password`, {currentPassword, newPassword});
+  }
+  exportSales(outletId?: number): Observable<Blob> {
+    return this.http.get(`${this.base}/reports/export?reportType=sales${outletId ? '&outletId=' + outletId : ''}`, {responseType: 'blob'});
+  }
 
   // Outlets
   getOutlets(): Observable<ApiResponse<OutletDto[]>> {
@@ -91,11 +97,17 @@ export class ApiService {
   getOrders(page = 1, pageSize = 20, outletId?: number, search?: string): Observable<ApiResponse<PagedResult<OrderDto>>> {
     let url = `${this.base}/orders?page=${page}&pageSize=${pageSize}`;
     if (outletId) url += `&outletId=${outletId}`;
-    if (search) url += `&search=${search}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
     return this.http.get<ApiResponse<PagedResult<OrderDto>>>(url);
   }
   getOrderById(orderId: number): Observable<ApiResponse<OrderDto>> {
     return this.http.get<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}`);
+  }
+  getReceipt(orderId: number): Observable<ApiResponse<OrderDto>> {
+    return this.http.post<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}/receipt`, {});
+  }
+  refundOrder(orderId: number, body: {reason: string; reference: string; restock: boolean; approverUsername?: string; approverPassword?: string}): Observable<ApiResponse<OrderDto>> {
+    return this.http.post<ApiResponse<OrderDto>>(`${this.base}/orders/${orderId}/refund`, body);
   }
   getOpenOrderForTable(tableId: number): Observable<ApiResponse<OrderDto>> {
     return this.http.get<ApiResponse<OrderDto>>(`${this.base}/orders/table/${tableId}/open`);

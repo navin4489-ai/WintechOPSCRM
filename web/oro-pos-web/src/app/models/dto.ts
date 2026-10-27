@@ -166,12 +166,16 @@ export interface ProcessPaymentRequest {
 }
 
 export interface VoidOrderRequest {
+  approverUsername?: string;
+  approverPassword?: string;
   orderId: number;
   reason: string;
   approvedByUserId?: number;
 }
 
 export interface ApplyDiscountRequest {
+  approverUsername?: string;
+  approverPassword?: string;
   amount?: number;
   percent?: number;
   reason?: string;

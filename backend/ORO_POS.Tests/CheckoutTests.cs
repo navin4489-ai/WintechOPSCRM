@@ -29,7 +29,7 @@ public class CheckoutTests : IDisposable
     [Fact]
     public async Task DiscountPersistsGstAndTotal()
     {
-        var result = await orders.ApplyDiscountAsync(1, new ApplyDiscountRequest { Percent = 10 }, 1);
+        var result = await orders.ApplyDiscountAsync(1, new ApplyDiscountRequest { Percent = 10, Reason = "QA loyalty discount" }, 1);
         Assert.Equal(60m, result.DiscountAmount);
         Assert.Equal(27m, result.TaxAmount);
         Assert.Equal(567m, result.TotalAmount);
@@ -108,7 +108,7 @@ public class CheckoutTests : IDisposable
     [Fact]
     public async Task SalesReportDoesNotSubtractDiscountTwiceAndIncludesUpi()
     {
-        await orders.ApplyDiscountAsync(1, new ApplyDiscountRequest { Percent = 10 }, 1);
+        await orders.ApplyDiscountAsync(1, new ApplyDiscountRequest { Percent = 10, Reason = "QA loyalty discount" }, 1);
         await orders.ProcessPaymentAsync(1, new ProcessPaymentRequest { TenderType = "UPI", Amount = 567 }, 1);
         var reports = new ReportService(db);
         var report = Assert.Single(await reports.GetSalesReportAsync(new SalesReportRequest { OutletId = 1 }, 1));
@@ -166,6 +166,16 @@ public class CheckoutTests : IDisposable
         var result = await orders.GetOrderByIdAsync(1, 1);
         Assert.Equal(0m, result!.TaxAmount);
         Assert.Equal(600m, result.TotalAmount);
+    }
+
+    [Fact]
+    public async Task AuthorizedFullDiscountCanSettleZeroBill()
+    {
+        await orders.ApplyDiscountAsync(1, new ApplyDiscountRequest { Percent = 100, Reason = "Manager-approved complimentary meal" }, 1);
+        var result = await orders.ProcessPaymentAsync(1, new ProcessPaymentRequest { TenderType = "Cash", Amount = 0 }, 1);
+        Assert.Equal("Closed", result.Status);
+        Assert.Equal(0m, result.TotalAmount);
+        Assert.Single(await db.InventoryLedgers.ToListAsync());
     }
 
     public void Dispose() => db.Dispose();

@@ -3,7 +3,7 @@
 ## Verified in this pass
 
 - API and Angular production builds succeed.
-- 17 backend tests pass in Release, including checkout/accounting regression tests in
+- 29 backend tests pass in Release, including checkout/accounting regression tests in
   `backend/ORO_POS.Tests/CheckoutTests.cs`.
 - Checkout persists the platform's existing 5% GST policy, rounded to paise.
 - Discounts update persisted GST/total; sales reports do not deduct discounts twice.
@@ -31,12 +31,50 @@
 Tests use EF InMemory. They do not prove PostgreSQL locking behavior, gateway
 integration, hardware printing, security isolation, or load capacity.
 
+## Hardening and Android release pass
+
+- Native Android 1.1.0 replaces the prototype with role-aware operations screens;
+  7 Flutter/widget tests pass and `flutter analyze` reports no issues.
+- New gold/navy ORO branding and owner-approved private release signing, HTTPS-only
+  Android networking, encrypted credential storage and no default-filled login.
+- API actions re-read the account's active status, permissions and outlet assignment.
+  Resource scope, role-escalation prevention, reason/manager approval, receipt audit,
+  refund controls and list scoping are enforced server-side.
+- Password rotation is available in web and Android. A password-derived security
+  stamp revokes older sessions. All pre-upgrade tokens must sign in again.
+- Fixed configuration precedence so environment secrets override JSON defaults.
+  Production refuses to boot with the checked-in development JWT secret.
+- Login rate limiting; production exceptions no longer return SQL/internal messages.
+- Full external refunds with reason/reference, optional stock returns and cash payout
+  recorded against the current shift. No bank calls are made.
+- Web order history, receipts/refunds, audit viewer, non-table sale creation,
+  quantity/modifier/notes entry, transfer controls, and real permission-checked CSV export.
+- Kitchen routing no longer creates a new duplicate ticket for every added item;
+  statuses advance in sequence and voids cancel active tickets.
+- Inventory validates movements; physical counts post the difference, not the absolute count.
+- New production databases require an initial admin password; demo seeding is opt-in
+  (`SEED_DEMO_DATA=true`). `RESET_DB_ON_START` is false in the blueprint.
+- Validation workflow added under `.github/workflows/validate.yml`. This workflow
+  must still be observed running successfully in GitHub, not merely assumed green.
+- `scripts/backup-database.ps1` provides an isolated `oro_pos` dump path; it has not
+  been executed or restore-tested and is not an automatic backup service.
+
+## Owner decisions
+
+- Use an existing external card terminal/UPI collection app. Automatic gateway
+  capture is not part of this release.
+- Keep the current free Render environment **for testing**. No billing upgrade or
+  production-hosting purchase was authorized or performed.
+
 ## Release blockers / remaining acceptance work
 
 - Perform a full role-by-role authorization and outlet-isolation review of every API,
   especially status changes, voids, table operations, reports, shifts and inventory.
-- Implement and verify refund, receipt, audit viewer, table operations and report
-  export flows against the complete BRD. CSV export currently contains a placeholder.
+- Complete end-to-end acceptance of the new refund, receipt, audit viewer, table
+  operation and export flows. The original implementation checklist overstates
+  coverage: supplier/PO modules, attendance scheduling/corrections, configurable
+  service charges, public QR ordering, peripheral management and offline replay
+  are not delivered as complete modules.
 - Card/UPI are recorded tender types, not confirmed gateway/bank transactions.
   Configure an actual provider and webhook reconciliation if online capture is required.
 - Confirm the business's GST applicability, tax classes and rates with its accountant;

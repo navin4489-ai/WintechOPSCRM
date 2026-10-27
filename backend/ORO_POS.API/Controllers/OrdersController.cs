@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using ORO_POS.Core.DTOs;
 using ORO_POS.Core.Enums;
 using ORO_POS.Core.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using ORO_POS.Infrastructure.Data;
+using ORO_POS.Core.Entities;
 
 namespace ORO_POS.API.Controllers;
 
@@ -63,6 +66,25 @@ public class OrdersController : ControllerBase
     {
         var updated = await _order.ApplyDiscountAsync(orderId, request, GetUserId());
         return Ok(new ApiResponse<OrderDto> { Success = true, Data = updated });
+    }
+
+    [HttpPost("{orderId}/refund")]
+    public async Task<IActionResult> Refund(int orderId, [FromBody] RefundRequest request)
+    {
+        var updated = await _order.RefundAsync(orderId, request, GetUserId());
+        return Ok(new ApiResponse<OrderDto> { Success = true, Data = updated });
+    }
+
+    [HttpPost("{orderId}/receipt")]
+    public async Task<IActionResult> Receipt(int orderId, [FromServices] AppDbContext db)
+    {
+        var data = await _order.GetOrderByIdAsync(orderId, GetUserId());
+        if (data == null) return NotFound();
+        var reprint = await db.AuditLogs.AnyAsync(a => a.Entity == "Order" && a.EntityId == orderId && (a.Action == "PrintReceipt" || a.Action == "ReprintReceipt"));
+        if (reprint && !await _auth.ValidatePermissionAsync(GetUserId(), Permission.ViewReports)) return Forbid();
+        db.AuditLogs.Add(new AuditLog { ActorId = GetUserId(), Action = reprint ? "ReprintReceipt" : "PrintReceipt", Entity = "Order", EntityId = orderId, Reason = "Receipt requested. Physical print completion depends on the device." });
+        await db.SaveChangesAsync();
+        return Ok(new ApiResponse<OrderDto> { Success = true, Data = data });
     }
 
     [HttpPost("{orderId}/items")]

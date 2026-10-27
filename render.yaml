@@ -1,9 +1,7 @@
 # Render Blueprint — ORO POS Platform
 # Provisions the API+SPA web service and a fresh PostgreSQL database.
 #
-# IMPORTANT: RESET_DB_ON_START is "true" so this first deploy wipes all data
-# and reseeds (roles, main outlet, admin user). After you have verified the
-# app works, change it to "false" or every subsequent deploy will wipe data.
+# Database reset is disabled. Never enable it on a live outlet.
 
 services:
   - type: web
@@ -26,7 +24,9 @@ services:
       - key: Jwt__Key
         generateValue: true
       - key: RESET_DB_ON_START
-        value: "true"
+        value: "false"
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
 
 databases:
   - name: the-bathany-db

@@ -30,3 +30,7 @@ Thumbs.db
 *.log
 appsettings.Development.json
 .env
+private-backups/
+**/key.properties
+**/*.jks
+**/*.keystore

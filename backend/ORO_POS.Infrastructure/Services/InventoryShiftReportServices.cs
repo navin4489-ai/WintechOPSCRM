@@ -16,10 +16,14 @@ public class KitchenService : IKitchenService
 
     public async Task<List<KitchenTicketDto>> GetKitchenTicketsAsync(int? outletId, int? stationId, int userId)
     {
+        var actor = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive)
+            ?? throw new UnauthorizedAccessException("User not found.");
+        if (actor.Role?.Name != "Owner") outletId = actor.OutletId ?? throw new UnauthorizedAccessException("Outlet assignment required.");
         var query = _db.KitchenTickets
             .Include(kt => kt.Order).ThenInclude(o => o.OrderItems).ThenInclude(oi => oi.Product)
             .Include(kt => kt.Order).ThenInclude(o => o.Table)
-            .Where(kt => !kt.IsDeleted);
+            .Where(kt => !kt.IsDeleted && kt.Status != "Served" && kt.Status != "Cancelled"
+                && kt.Order.OrderItems.Any(i => (i.KitchenStation ?? "General") == kt.StationName && i.Status != "Served"));
 
         if (outletId.HasValue)
             query = query.Where(kt => kt.Order.OutletId == outletId.Value);
@@ -45,9 +49,13 @@ public class KitchenService : IKitchenService
     {
         var ticket = await _db.KitchenTickets.FindAsync(request.TicketId);
         if (ticket == null || ticket.IsDeleted) throw new KeyNotFoundException("Ticket not found.");
+        var next = ticket.Status switch { "New" => "Accepted", "Accepted" => "InProgress", "InProgress" => "Ready", "Ready" => "Served", _ => "" };
+        if (request.Status != next) throw new InvalidOperationException("Invalid kitchen status transition. Refresh the ticket.");
 
         ticket.Status = request.Status;
         ticket.UpdatedAt = DateTime.UtcNow;
+        var items = await _db.OrderItems.Where(i => i.OrderId == ticket.OrderId && (i.KitchenStation ?? "General") == ticket.StationName && i.Status != "Served").ToListAsync();
+        foreach (var item in items) item.Status = request.Status;
 
         if (request.Status == KitchenTicketStatus.Accepted.ToString())
             ticket.AcceptedAt = DateTime.UtcNow;
@@ -81,7 +89,7 @@ public class KitchenService : IKitchenService
             AcceptedAt = kt.AcceptedAt,
             ReadyAt = kt.ReadyAt,
             ServedAt = kt.ServedAt,
-            Items = kt.Order.OrderItems.Select(oi => new KitchenTicketItemDto
+            Items = kt.Order.OrderItems.Where(oi => (oi.KitchenStation ?? "General") == kt.StationName && (kt.Status == "Served" || oi.Status != "Served")).Select(oi => new KitchenTicketItemDto
             {
                 OrderItemId = oi.Id,
                 ProductName = oi.ProductName,
@@ -144,17 +152,22 @@ public class InventoryService : IInventoryService
 
     public async Task<InventoryLedgerDto> RecordInventoryMovementAsync(RecordInventoryRequest request, int actorId)
     {
-        var product = request.ProductId.HasValue ? await _db.Products.FindAsync(request.ProductId.Value) : null;
+        var product = request.ProductId.HasValue ? await _db.Products.Include(p => p.InventoryLedgers).FirstOrDefaultAsync(p => p.Id == request.ProductId.Value) : null;
+        if (product == null) throw new InvalidOperationException("Select a valid product.");
+        if (!new[] { "Receipt", "Sale", "Waste", "Adjustment", "PhysicalCount" }.Contains(request.MovementType))
+            throw new InvalidOperationException("Invalid inventory movement type.");
+        if ((request.Quantity == 0 && request.MovementType != "PhysicalCount") || (request.MovementType != "Adjustment" && request.Quantity < 0))
+            throw new InvalidOperationException("Use a positive quantity, or a signed non-zero adjustment.");
         var actor = await _db.Users.FindAsync(actorId);
 
         var ledger = new InventoryLedger
         {
             ProductId = request.ProductId,
-            MovementType = request.MovementType,
-            Quantity = request.Quantity,
+            MovementType = request.MovementType == "PhysicalCount" ? "Adjustment" : request.MovementType,
+            Quantity = request.MovementType == "PhysicalCount" ? request.Quantity - CalculateStock(product) : request.Quantity,
             Location = request.Location,
             Batch = request.Batch,
-            Source = request.Source,
+            Source = request.MovementType == "PhysicalCount" ? $"Physical count {request.Quantity}: {request.Source}" : request.Source,
             ActorId = actorId,
             CreatedAt = DateTime.UtcNow
         };
@@ -189,6 +202,10 @@ public class InventoryService : IInventoryService
         var product = await _db.Products.FindAsync(request.ProductId);
         var ingredient = await _db.Products.FindAsync(request.IngredientId);
         if (product == null || ingredient == null) throw new KeyNotFoundException("Product or ingredient not found.");
+        if (request.ProductId == request.IngredientId || request.Quantity <= 0 || product.OutletId != ingredient.OutletId)
+            throw new InvalidOperationException("A recipe needs a different ingredient in the same outlet and a positive quantity.");
+        if (await _db.Recipes.AnyAsync(r => r.ProductId == request.ProductId && r.IngredientId == request.IngredientId))
+            throw new InvalidOperationException("This ingredient is already mapped to the product.");
 
         var recipe = new Recipe
         {
@@ -245,6 +262,7 @@ public class ShiftService : IShiftService
 
     public async Task<ShiftDto> OpenShiftAsync(OpenShiftRequest request, int userId)
     {
+        if (request.OpeningFloat < 0) throw new InvalidOperationException("Opening float cannot be negative.");
         var existing = await _db.Shifts.FirstOrDefaultAsync(s => s.UserId == userId && s.Status == ShiftStatus.Open.ToString());
         if (existing != null) throw new InvalidOperationException("User already has an open shift.");
 
@@ -424,11 +442,11 @@ public class ReportService : IReportService
 
         var todayOrders = await query.CountAsync(o => o.CreatedAt.Date == today);
         var todaySales = await query.Where(o => o.CreatedAt.Date == today && o.Status == "Closed").SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
-        var todayCash = await _db.Payments.Include(p => p.Order).Where(p => p.TenderType == "Cash" && p.Order.CreatedAt.Date == today).SumAsync(p => (decimal?)p.Amount) ?? 0;
+        var todayCash = await _db.Payments.Include(p => p.Order).Where(p => p.Status == "Captured" && p.TenderType == "Cash" && p.Order.CreatedAt.Date == today && (!outletId.HasValue || p.Order.OutletId == outletId.Value)).SumAsync(p => (decimal?)p.Amount) ?? 0;
 
         var openTables = await _db.Tables.CountAsync(t => t.Status == "Occupied" && (!outletId.HasValue || t.OutletId == outletId.Value));
-        var pendingTickets = await _db.KitchenTickets.CountAsync(kt => kt.Status == "New" || kt.Status == "InProgress");
-        var lowStock = (await _db.Products.Include(p => p.InventoryLedgers).Where(p => !p.IsDeleted).ToListAsync())
+        var pendingTickets = await _db.KitchenTickets.CountAsync(kt => (kt.Status == "New" || kt.Status == "Accepted" || kt.Status == "InProgress" || kt.Status == "Ready") && (!outletId.HasValue || kt.Order.OutletId == outletId.Value));
+        var lowStock = (await _db.Products.Include(p => p.InventoryLedgers).Where(p => !p.IsDeleted && (!outletId.HasValue || p.OutletId == outletId.Value)).ToListAsync())
             .Count(p => InventoryService.CalculateStock(p) <= 5);
 
         return new DashboardSummaryDto
@@ -445,9 +463,10 @@ public class ReportService : IReportService
 
     public async Task<List<AuditLogDto>> GetAuditLogsAsync(int? outletId, PagedRequest request, int userId)
     {
-        var query = _db.AuditLogs.Include(a => a.Actor).Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt);
+        var query = _db.AuditLogs.Include(a => a.Actor).Where(a => !a.IsDeleted);
+        if (outletId.HasValue) query = query.Where(a => a.Actor != null && a.Actor.OutletId == outletId.Value);
         var total = await query.CountAsync();
-        var items = await query.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
+        var items = await query.OrderByDescending(a => a.CreatedAt).Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
             .Select(a => new AuditLogDto
             {
                 Id = a.Id,
@@ -461,10 +480,19 @@ public class ReportService : IReportService
         return items;
     }
 
-    public Task<byte[]> ExportReportAsync(string reportType, SalesReportRequest request, int userId)
+    public async Task<byte[]> ExportReportAsync(string reportType, SalesReportRequest request, int userId)
     {
-        // CSV export stub
-        var csv = "ReportType,Data\n" + reportType + ",exported\n";
-        return Task.FromResult(System.Text.Encoding.UTF8.GetBytes(csv));
+        if (reportType != "sales") throw new InvalidOperationException("Supported export: sales.");
+        var rows = await GetSalesReportAsync(request, userId);
+        var csv = new System.Text.StringBuilder("Group,Orders,Gross INR,Discount INR,Tax INR,Net INR,Cash INR,Card INR,UPI INR\r\n");
+        foreach (var row in rows)
+        {
+            var group = row.GroupKey ?? "";
+            if (group.StartsWith('=') || group.StartsWith('+') || group.StartsWith('-') || group.StartsWith('@')) group = "'" + group;
+            csv.Append('"').Append(group.Replace("\"", "\"\"")).Append("\",");
+            csv.AppendLine(string.Join(",", new decimal[] { row.OrderCount, row.GrossSales, row.Discounts, row.Taxes, row.NetSales, row.Cash, row.Card, row.DigitalWallet }
+                .Select(x => x.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        }
+        return System.Text.Encoding.UTF8.GetBytes("\uFEFF" + csv);
     }
 }

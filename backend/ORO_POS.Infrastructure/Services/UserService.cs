@@ -69,8 +69,8 @@ public class UserService : IUserService
             throw new InvalidOperationException("Username is required.");
         if (string.IsNullOrWhiteSpace(email))
             throw new InvalidOperationException("Email is required.");
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-            throw new InvalidOperationException("Password must be at least 6 characters.");
+        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 12)
+            throw new InvalidOperationException("Password must be at least 12 characters.");
 
         var usernameTaken = await _db.Users.AnyAsync(u => u.Username == username && !u.IsDeleted);
         if (usernameTaken)
@@ -167,8 +167,8 @@ public class UserService : IUserService
         // Password change is optional on update.
         if (!string.IsNullOrWhiteSpace(request.Password))
         {
-            if (request.Password.Length < 6)
-                throw new InvalidOperationException("Password must be at least 6 characters.");
+            if (request.Password.Length < 12)
+                throw new InvalidOperationException("Password must be at least 12 characters.");
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         }
 

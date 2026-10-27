@@ -11,6 +11,7 @@ import { InventoryComponent } from './components/inventory/inventory.component';
 import { MenuComponent } from './components/menu/menu.component';
 import { StaffComponent } from './components/staff/staff.component';
 import { AuthGuard } from './guards/auth.guard';
+import { OperationsComponent } from './components/operations/operations.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -29,6 +30,8 @@ export const routes: Routes = [
       { path: 'reports', component: ReportsComponent },
       { path: 'shifts', component: ShiftsComponent },
       { path: 'staff', component: StaffComponent },
+      { path: 'orders', component: OperationsComponent },
+      { path: 'audit', component: OperationsComponent, data: { audit: true } },
     ]
   },
   { path: '**', redirectTo: 'dashboard' }
