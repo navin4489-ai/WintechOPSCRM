@@ -1,4 +1,4 @@
-# ORO POS Platform - Implementation Summary
+# Wintech POS Platform - Implementation Summary
 
 ## Project Structure
 

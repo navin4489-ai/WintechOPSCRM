@@ -99,6 +99,7 @@ public class OrderService : IOrderService
             .Include(o => o.Payments)
             .Include(o => o.Table)
             .Include(o => o.User)
+            .Include(o => o.Outlet)
             .FirstOrDefaultAsync(o => o.Id == orderId && !o.IsDeleted);
 
         if (order == null) return null;
@@ -127,6 +128,7 @@ public class OrderService : IOrderService
         outletId = await TenantAccess.ScopeAsync(_db, userId, outletId);
 
         var query = _db.Orders
+            .Include(o => o.Outlet)
             .Include(o => o.Table)
             .Include(o => o.User)
             .Include(o => o.Payments)
@@ -680,6 +682,9 @@ public class OrderService : IOrderService
         {
             Id = o.Id,
             OutletId = o.OutletId,
+            OutletName = o.Outlet?.Name ?? "",
+            OutletAddress = o.Outlet?.Address,
+            OutletPhone = o.Outlet?.Phone,
             TableId = o.TableId,
             TableNumber = o.Table?.TableNumber,
             UserId = o.UserId,

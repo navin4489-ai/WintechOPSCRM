@@ -137,6 +137,9 @@ export interface PaymentDto {
 }
 
 export interface OrderDto {
+  outletName?: string;
+  outletAddress?: string;
+  outletPhone?: string;
   id: number;
   outletId: number;
   tableId?: number;
@@ -288,6 +291,10 @@ export interface CloseShiftRequest {
 }
 
 export interface ZReportDto {
+  outletId?: number;
+  outletName?: string;
+  outletAddress?: string;
+  outletPhone?: string;
   shiftId: number;
   userName: string;
   openTime: Date;

@@ -63,7 +63,7 @@ export class LayoutComponent {
   }
 
   logout() {
-    if (!confirm('Sign out of ORO POS?')) return;
+    if (!confirm('Sign out of Wintech POS?')) return;
     this.authService.logout();
     this.router.navigate(['/login']);
   }

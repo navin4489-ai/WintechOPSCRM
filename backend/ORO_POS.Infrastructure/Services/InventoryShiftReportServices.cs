@@ -356,7 +356,7 @@ public class ShiftService : IShiftService
 
     public async Task<ZReportDto> GenerateZReportAsync(int shiftId, int userId)
     {
-        var shift = await _db.Shifts.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == shiftId);
+        var shift = await _db.Shifts.Include(s => s.User).Include(s => s.Outlet).FirstOrDefaultAsync(s => s.Id == shiftId);
         if (shift == null) throw new KeyNotFoundException("Shift not found.");
         await TenantAccess.RequireAsync(_db, userId, shift.OutletId);
 
@@ -376,6 +376,10 @@ public class ShiftService : IShiftService
         return new ZReportDto
         {
             ShiftId = shift.Id,
+            OutletId = shift.OutletId,
+            OutletName = shift.Outlet?.Name ?? "",
+            OutletAddress = shift.Outlet?.Address,
+            OutletPhone = shift.Outlet?.Phone,
             UserName = shift.User?.Username ?? string.Empty,
             OpenTime = shift.OpenTime,
             CloseTime = shift.CloseTime,

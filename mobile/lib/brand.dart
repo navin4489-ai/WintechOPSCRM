@@ -4,12 +4,12 @@ const navy = Color(0xff0b1b3a);
 const gold = Color(0xffffb515);
 const canvas = Color(0xfff0f3f8);
 
-class OroLogo extends StatelessWidget {
+class WintechLogo extends StatelessWidget {
   final double size;
-  const OroLogo({super.key, this.size = 48});
+  const WintechLogo({super.key, this.size = 48});
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'ORO POS logo',
+    label: 'Wintech POS logo',
     image: true,
     child: Container(
       width: size,
@@ -25,34 +25,27 @@ class OroLogo extends StatelessWidget {
           ),
         ],
       ),
-      child: CustomPaint(painter: _OroMark()),
+      child: CustomPaint(painter: _WintechMark()),
     ),
   );
 }
 
-class _OroMark extends CustomPainter {
+class _WintechMark extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = navy
       ..style = PaintingStyle.stroke
       ..strokeWidth = size.width * .09
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromCircle(
-        center: Offset(size.width / 2, size.height / 2),
-        radius: size.width * .235,
-      ),
-      -.6,
-      5.3,
-      false,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(size.width * .69, size.height * .30),
-      size.width * .055,
-      Paint()..color = navy,
-    );
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final path = Path()
+      ..moveTo(size.width * .211, size.height * .297)
+      ..lineTo(size.width * .322, size.height * .703)
+      ..lineTo(size.width * .5, size.height * .449)
+      ..lineTo(size.width * .678, size.height * .703)
+      ..lineTo(size.width * .789, size.height * .297);
+    canvas.drawPath(path, paint);
   }
 
   @override

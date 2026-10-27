@@ -16,6 +16,8 @@
    on Android to edit their own business details and manage their own QR.
 6. Choose **Enable & generate QR**. Download the PNG on web or print a QR poster
    from Android. Copy the ordering link if needed.
+   QR previews and printed posters do not display the URL below the code; use
+   **Copy link** or **Open ordering page** separately. Web also provides **Print QR / PDF**.
 7. To stop new public orders, disable ordering or close the outlet. Rotating a link
    revokes the old QR code; replace all printed posters afterward.
 8. Use **Use this outlet workspace** to manage a different outlet as Owner. Cash
@@ -80,6 +82,12 @@ same interrupted checkout return the existing order instead of a duplicate.
   inventory workflows are the same as staff-created orders.
 
 ## Deployment / privacy
+
+- Wintech is the application brand. Customer bills/receipts, QR posters and report
+  PDFs do not carry a platform brand/footer. Their header is the outlet name in
+  bold at the center, with its configured address and contact number underneath.
+- Set accurate outlet contact/address details before printing. If either is blank,
+  documents explicitly indicate that it is not configured rather than inventing details.
 
 - `PublicBaseUrl` defaults to `https://the-bathany.onrender.com`; configure it when
   deploying to another domain so generated QR codes point to the correct site.

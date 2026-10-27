@@ -60,7 +60,7 @@ public class PublicOrderingTests : IDisposable
     }
     [Fact] public async Task ProductImagesArePersistedReplacedAndExposedByUrlOnly()
     {
-        var bytes=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=");
+        var bytes=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC");
         var images=new ProductImageService(db);var url=await images.SaveAsync(1,bytes,1);Assert.StartsWith("/api/products/1/image?v=",url);
         Assert.Equal(url,(await guest.GetMenuAsync(Key)).Products.Single().ImageUrl);
         await images.SaveAsync(1,bytes,1);Assert.Single(await db.ProductImages.ToListAsync());
@@ -83,7 +83,7 @@ public class PublicOrderingTests : IDisposable
     [Fact] public async Task OutletManagerCanUploadOwnItemWithoutPlatformSettingsPermission()
     {
         db.Roles.Add(new Role{Id=2,Name="StoreManager",Permissions="[]"});db.Users.Add(new User{Id=2,Username="outlet-admin",RoleId=2,OutletId=1,IsActive=true});await db.SaveChangesAsync();
-        var png=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=");
+        var png=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC");
         Assert.StartsWith("/api/products/1/image",await new ProductImageService(db).SaveAsync(1,png,2));
     }
     [Fact] public async Task ExistingCustomerCanTrackWhenNewOrderingIsDisabled()

@@ -55,6 +55,13 @@ public class TenantIsolationTests
     {
         using var f=await Fixture.Create();var before=await f.Db.Outlets.CountAsync();await Assert.ThrowsAsync<InvalidOperationException>(()=>f.Provision.CreateAsync(Fixture.Request("Should not exist","tenant_a_admin"),1));Assert.Equal(before,await f.Db.Outlets.CountAsync());
     }
+    [Fact] public async Task BillsAndShiftReportsUseTheirActualOutletNotTheSuperAdminProfile()
+    {
+        using var f=await Fixture.Create();var outlet=await f.Db.Outlets.FindAsync(f.DB);outlet!.Address="22 Market Road";outlet.Phone="8888888888";await f.Db.SaveChangesAsync();f.Db.ChangeTracker.Clear();
+        var bill=await f.Orders.GetOrderByIdAsync(f.OB.Id,1);var report=await f.Shifts.GenerateZReportAsync(f.SB.Id,1);
+        Assert.Equal("Tenant B",bill!.OutletName);Assert.Equal("22 Market Road",bill.OutletAddress);Assert.Equal("8888888888",bill.OutletPhone);
+        Assert.Equal(f.DB,report.OutletId);Assert.Equal(bill.OutletName,report.OutletName);Assert.Equal(bill.OutletAddress,report.OutletAddress);Assert.Equal(bill.OutletPhone,report.OutletPhone);Assert.Equal(210m,bill.TotalAmount);
+    }
     [Fact] public async Task OutletAdminsCreateIndependentCategoriesAndRejectOwnDuplicates()
     {
         using var f=await Fixture.Create();var a=await f.Menu.CreateCategoryAsync(new CreateCategoryRequest{OutletId=f.DA,Name="Fresh breads"},f.UA);var b=await f.Menu.CreateCategoryAsync(new CreateCategoryRequest{OutletId=f.DB,Name="Fresh breads"},f.UB);

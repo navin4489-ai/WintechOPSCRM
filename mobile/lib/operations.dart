@@ -35,6 +35,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
   dynamic shift;
   List<dynamic> rows = [];
   int page = 1;
+  int? loadedOutletId;
   String filter = '', reportQuery = '';
   ApiService get api => widget.api;
   String get module => widget.module;
@@ -90,6 +91,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
       if (mounted) {
         setState(() {
           data = result;
+          loadedOutletId = outlet;
           shift = open;
           rows = module == 'My Outlet' && result is Map
               ? [result]
@@ -181,7 +183,13 @@ class _OperationsScreenState extends State<OperationsScreen> {
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Z-report · shift $id'),
+          title: report['outletName'] != null
+              ? OutletBusinessHeader(
+                  outlet: OutletBrand.fromDocument(
+                    Map<String, dynamic>.from(report),
+                  ),
+                )
+              : Text('Z-report · shift $id'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -212,6 +220,16 @@ class _OperationsScreenState extends State<OperationsScreen> {
             ),
           ),
           actions: [
+            TextButton(
+              onPressed: () async {
+                try {
+                  await printZReport(Map<String, dynamic>.from(report));
+                } catch (e) {
+                  if (ctx.mounted) notify(ctx, e);
+                }
+              },
+              child: const Text('Print / PDF'),
+            ),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Done'),
@@ -413,7 +431,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
     const alphabet =
         'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#';
     final generated =
-        'OrO2!${List.generate(16, (_) => alphabet[random.nextInt(alphabet.length)]).join()}';
+        'Wt2!${List.generate(16, (_) => alphabet[random.nextInt(alphabet.length)]).join()}';
     final value = await askForm(
       context,
       outlet == null ? 'Create outlet' : 'Outlet configuration',
@@ -534,7 +552,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
                   onPressed: () => Clipboard.setData(
                     ClipboardData(
                       text:
-                          'ORO POS — ${result['outlet']['name']}\nSign in: $login\nUser ID: $username\nInitial password: $password\nAccess: assigned outlet only. Please change password after signing in.',
+                          'Wintech POS — ${result['outlet']['name']}\nSign in: $login\nUser ID: $username\nInitial password: $password\nAccess: assigned outlet only. Please change password after signing in.',
                     ),
                   ),
                   child: const Text('Copy login details'),
@@ -563,7 +581,9 @@ class _OperationsScreenState extends State<OperationsScreen> {
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, update) => AlertDialog(
-            title: Text('${outlet['name']} · Ordering QR'),
+            title: OutletBusinessHeader(
+              outlet: OutletBrand.fromOutlet(Map<String, dynamic>.from(outlet)),
+            ),
             content: SizedBox(
               width: 430,
               child: SingleChildScrollView(
@@ -581,11 +601,6 @@ class _OperationsScreenState extends State<OperationsScreen> {
                           width: 230,
                           height: 230,
                         ),
-                      ),
-                    if (config['publicUrl'] != null)
-                      SelectableText(
-                        config['publicUrl'],
-                        style: const TextStyle(fontSize: 11),
                       ),
                     const SizedBox(height: 12),
                     Text(
@@ -615,9 +630,9 @@ class _OperationsScreenState extends State<OperationsScreen> {
                   onPressed: () async {
                     try {
                       await printOutletQr(
-                        outlet['name'],
+                        api,
+                        Map<String, dynamic>.from(outlet),
                         config['qrPngBase64'],
-                        config['publicUrl'],
                       );
                     } catch (e) {
                       if (ctx.mounted) notify(ctx, e);
@@ -784,11 +799,14 @@ class _OperationsScreenState extends State<OperationsScreen> {
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('${detail['orderNumber']}'),
+          title: detail['outletName'] != null
+              ? OutletBusinessHeader(outlet: OutletBrand.fromDocument(detail))
+              : Text('${detail['orderNumber']}'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Text('${detail['orderNumber']}'),
                 Text('${detail['status']} · ${dateLabel(detail['createdAt'])}'),
                 ...((detail['orderItems'] as List?) ?? []).map(
                   (i) => ListTile(
@@ -906,7 +924,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const OroLogo(size: 48),
+            const WintechLogo(size: 48),
             const SizedBox(height: 20),
             Text(
               'Hello, ${api.user?.username}',
@@ -1341,7 +1359,15 @@ class _OperationsScreenState extends State<OperationsScreen> {
       ),
       if (api.can('ExportReports'))
         FilledButton.icon(
-          onPressed: busy ? null : () => run(() => printSales(rows)),
+          onPressed: busy
+              ? null
+              : () => run(
+                  () => printSales(
+                    api,
+                    rows,
+                    outletId: loadedOutletId ?? api.outletId,
+                  ),
+                ),
           icon: const Icon(Icons.print_outlined),
           label: const Text('Print / PDF'),
         ),

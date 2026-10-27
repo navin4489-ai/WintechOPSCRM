@@ -1,4 +1,4 @@
-# Deploying ORO POS to Render
+# Deploying Wintech POS to Render
 
 Target service: **`the-bathany`** → `https://the-bathany.onrender.com`
 

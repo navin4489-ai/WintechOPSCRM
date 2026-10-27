@@ -152,7 +152,7 @@ builder.Services.AddControllers(options => options.Filters.AddService<ORO_POS.AP
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new() { Title = "ORO POS API", Version = "v1" });
+    c.SwaggerDoc("v1", new() { Title = "Wintech POS API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Name = "Authorization",

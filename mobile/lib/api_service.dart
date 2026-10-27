@@ -170,7 +170,7 @@ class ApiService {
       body: {
         'username': username.trim(),
         'password': password,
-        'deviceName': 'ORO Android',
+        'deviceName': 'Wintech Android',
         'stationType': 'POS',
       },
     );

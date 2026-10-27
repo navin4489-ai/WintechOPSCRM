@@ -1,4 +1,4 @@
-# Render Blueprint — ORO POS Platform
+# Render Blueprint — Wintech POS Platform
 # Provisions the API+SPA web service and a fresh PostgreSQL database.
 #
 # Database reset is disabled. Never enable it on a live outlet.

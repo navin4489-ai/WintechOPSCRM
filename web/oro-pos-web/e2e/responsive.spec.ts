@@ -63,3 +63,38 @@ test('Outlet admin creates a category inside the item editor on a phone',async({
   expect(response.request().postDataJSON().outletId).toBe(10);await expect(page.locator('.category-overlay')).toHaveCount(0);
   await expect(page.locator('select[name=categoryId] option:checked')).toHaveText('Fresh breads');await fits(page);
 });
+test('Printed receipt uses the order outlet header, never the operator or platform',async({page},info)=>{
+  await setup(page,'Owner');
+  const bill={id:42,outletId:20,outletName:'Receipt Outlet B',outletAddress:'22 Market Road',outletPhone:'8888888888',orderNumber:'BILL-0042',createdAt:'2026-10-27T12:00:00Z',status:'Closed',serviceType:'Takeaway',subtotal:100,discountAmount:0,taxAmount:5,totalAmount:105,orderItems:[{id:1,quantity:1,productName:'Meal',lineTotal:100}],payments:[{status:'Captured',amount:105}]};
+  await page.route('**/api/orders**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,data:new URL(route.request().url()).pathname==='/api/orders'?{items:[bill],page:1,pageSize:20,totalCount:1}:bill})}));
+  await page.goto('/orders');await page.getByRole('button',{name:'View bill',exact:true}).click();
+  await expect(page.locator('.outlet-bill-header')).toContainText('Receipt Outlet B');
+  const created=page.waitForEvent('popup');await page.getByRole('button',{name:'Print receipt',exact:true}).click();const popup=await created;
+  await expect(popup.locator('.outlet-header h1')).toHaveText('Receipt Outlet B');await expect(popup.locator('.outlet-address')).toHaveText('22 Market Road');await expect(popup.locator('.outlet-contact')).toContainText('8888888888');
+  expect(await popup.locator('.outlet-header').evaluate(e=>getComputedStyle(e).textAlign)).toBe('center');expect(Number(await popup.locator('.outlet-header h1').evaluate(e=>getComputedStyle(e).fontWeight))).toBeGreaterThanOrEqual(700);
+  await expect(popup.locator('body')).not.toContainText('ORO');await expect(popup.locator('body')).not.toContainText('Wintech');await expect(popup.locator('body')).not.toContainText('Responsive Outlet');
+  await popup.pdf({path:info.outputPath('outlet-receipt.pdf'),format:'A4'});await popup.close();
+});
+test('Shift print/PDF contains only its actual outlet branding',async({page},info)=>{
+  await setup(page,'Owner');
+  await page.route('**/api/shifts?**',route=>route.fulfill({json:{success:true,data:[{id:7,userName:'cashier',status:'Closed',openTime:'2026-10-27T10:00:00Z',closeTime:'2026-10-27T15:00:00Z',openingFloat:500,variance:0}]}}));
+  await page.route('**/api/shifts/7/z-report',route=>route.fulfill({json:{success:true,data:{shiftId:7,outletId:30,outletName:'Shift Outlet C',outletAddress:'3 Station Road',outletPhone:'7777777777',userName:'cashier',openTime:'2026-10-27T10:00:00Z',closeTime:'2026-10-27T15:00:00Z',openingFloat:500,grossSales:100,discounts:0,taxes:5,netSales:100,cashExpected:605,cashCounted:605,variance:0,orderCount:1}}}));
+  await page.goto('/shifts');await page.getByRole('button',{name:'Z-report',exact:true}).click();const created=page.waitForEvent('popup');await page.getByRole('button',{name:'Print / PDF',exact:true}).click();const popup=await created;
+  await expect(popup.locator('.outlet-header h1')).toHaveText('Shift Outlet C');await expect(popup.locator('body')).toContainText('3 Station Road');await expect(popup.locator('body')).toContainText('7777777777');await expect(popup.locator('body')).not.toContainText('Wintech');await expect(popup.locator('body')).not.toContainText('ORO');await popup.pdf({path:info.outputPath('outlet-z-report.pdf'),format:'A4'});await popup.close();
+});
+test('QR preview and printed poster never display a URL below the code',async({page},info)=>{
+  await setup(page,'StoreManager');
+  const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC';
+  await page.route('**/api/outlet-settings/ordering',route=>route.fulfill({json:{success:true,data:{enabled:true,publicUrl:'https://ordering.example.invalid/private-menu-link',qrPngBase64:png,cashOnly:true}}}));
+  await page.goto('/outlet-settings');await expect(page.locator('.qr img')).toBeVisible();await expect(page.locator('.qr')).not.toContainText('https://');await expect(page.getByRole('button',{name:'Copy link',exact:true})).toBeVisible();
+  const created=page.waitForEvent('popup');await page.getByRole('button',{name:'Print QR / PDF',exact:true}).click();const popup=await created;
+  await expect(popup.locator('.outlet-header h1')).toHaveText(outlet.name);await expect(popup.locator('body')).toContainText(outlet.address);await expect(popup.locator('body')).toContainText(outlet.phone);await expect(popup.locator('body')).not.toContainText('https://');await expect(popup.locator('body')).not.toContainText('ordering.example');await expect(popup.locator('body')).not.toContainText('ORO');await expect(popup.locator('body')).not.toContainText('Wintech');await popup.pdf({path:info.outputPath('outlet-qr-poster.pdf'),format:'A4'});await popup.close();
+});
+test('Sales report PDF uses outlet name, address and contact without platform branding',async({page},info)=>{
+  await setup(page,'Owner');await page.goto('/reports');const created=page.waitForEvent('popup');await page.getByRole('button',{name:'Print / PDF',exact:true}).click();const popup=await created;
+  await expect(popup.locator('.outlet-header h1')).toHaveText(outlet.name);await expect(popup.locator('body')).toContainText(outlet.address);await expect(popup.locator('body')).toContainText(outlet.phone);await expect(popup.locator('body')).not.toContainText('Wintech');await expect(popup.locator('body')).not.toContainText('ORO');await popup.pdf({path:info.outputPath('outlet-sales-report.pdf'),format:'A4'});await popup.close();
+});
+test('Customer confirmation Save to PDF hides platform branding and private URL proof',async({page},info)=>{
+  await setup(page);await page.goto('/order/'+'a'.repeat(64));await page.getByRole('button',{name:'Add',exact:true}).click();await page.getByRole('button',{name:'Add to order',exact:true}).click();await page.getByLabel('Your name',{exact:true}).fill('UI guest');await page.getByLabel('Contact number',{exact:true}).fill('9999999999');await page.getByRole('button',{name:'Place order — pay at outlet',exact:true}).click();await expect(page.getByRole('heading',{name:'Order received'})).toBeVisible();const saved=page.url();
+  await page.evaluate(()=>window.dispatchEvent(new Event('beforeprint')));expect(page.url()).not.toContain('#track=');await page.emulateMedia({media:'print'});await expect(page.locator('.public-print-header')).toBeVisible();await expect(page.locator('.public-print-header h1')).toHaveText(outlet.name);await expect(page.locator('.guest>footer')).toBeHidden();await expect(page.locator('.guest>header img')).toBeHidden();expect(await page.title()).not.toMatch(/Wintech|ORO/);await page.pdf({path:info.outputPath('customer-confirmation.pdf'),format:'A4'});await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));expect(page.url()).toBe(saved);
+});

@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { InrPipe } from '../../pipes/inr.pipe';
 import { ShiftDto, ZReportDto } from '../../models';
+import {DocumentPrintService} from '../../services/document-print.service';
 
 @Component({
   selector: 'app-shifts',
@@ -37,7 +38,8 @@ export class ShiftsComponent implements OnInit {
   constructor(
     private api: ApiService,
     private auth: AuthService,
-    private toast: ToastService
+    private toast: ToastService,
+    private documents:DocumentPrintService
   ) {
     this.user = this.auth.getCurrentUser();
     this.outletId = this.user?.outletId ?? 1;
@@ -116,6 +118,7 @@ export class ShiftsComponent implements OnInit {
     this.showZReport = false;
     this.zReport = null;
   }
+  printZReport(){if(this.zReport)try{this.documents.zReport(this.zReport);}catch(e){this.toast.error((e as Error).message);}}
 
   expectedCash(s: ShiftDto): number {
     const gross = (s as any).grossSales ?? 0;

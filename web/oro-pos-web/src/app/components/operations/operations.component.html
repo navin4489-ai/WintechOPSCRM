@@ -14,6 +14,7 @@
 </section>
 @if (selected) {
   <div class="overlay"><section class="dialog" role="dialog" aria-modal="true" aria-label="Order bill">
+    <header class="outlet-bill-header"><h2>{{selected.outletName}}</h2><p>{{selected.outletAddress||'Address not configured'}}</p><p>Contact: {{selected.outletPhone||'Not configured'}}</p></header>
     <div class="panel-head"><h2>{{ selected.orderNumber }}</h2><button (click)="selected = null" [disabled]="busy" aria-label="Close bill">×</button></div>
     <p>{{ selected.status }} · {{ selected.serviceType }} · {{ selected.createdAt | date:'short' }}</p>
     @if(selected.notes){<p style="white-space:pre-line">{{selected.notes}}</p>}

@@ -239,6 +239,9 @@ public class CreateOrderRequest
 
 public class OrderDto
 {
+    public string OutletName { get; set; } = "";
+    public string? OutletAddress { get; set; }
+    public string? OutletPhone { get; set; }
     public int Id { get; set; }
     public int OutletId { get; set; }
     public int? TableId { get; set; }
@@ -462,6 +465,10 @@ public class SalesReportDto
 
 public class ZReportDto
 {
+    public int OutletId { get; set; }
+    public string OutletName { get; set; } = "";
+    public string? OutletAddress { get; set; }
+    public string? OutletPhone { get; set; }
     public int ShiftId { get; set; }
     public string UserName { get; set; } = string.Empty;
     public DateTime OpenTime { get; set; }

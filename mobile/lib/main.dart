@@ -35,7 +35,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) => MaterialApp(
     navigatorKey: navigatorKey,
-    title: 'ORO POS',
+    title: 'Wintech POS',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
@@ -142,10 +142,10 @@ class _SignInState extends State<SignIn> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Center(child: OroLogo(size: 76)),
+                  const Center(child: WintechLogo(size: 76)),
                   const SizedBox(height: 20),
                   const Text(
-                    'ORO POS',
+                    'Wintech POS',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
@@ -350,11 +350,17 @@ class _OperationsHomeState extends State<OperationsHome> {
         padding: EdgeInsets.all(24),
         child: Row(
           children: [
-            OroLogo(size: 42),
+            WintechLogo(size: 42),
             SizedBox(width: 12),
-            Text(
-              'ORO POS',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Wintech POS',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+              ),
             ),
           ],
         ),

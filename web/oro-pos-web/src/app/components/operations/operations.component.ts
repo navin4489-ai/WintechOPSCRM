@@ -7,6 +7,7 @@ import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { InrPipe } from '../../pipes/inr.pipe';
 import { OrderDto, AuditLogDto } from '../../models';
+import {DocumentPrintService} from '../../services/document-print.service';
 
 @Component({selector: 'app-operations', standalone: true, imports: [CommonModule, FormsModule, InrPipe], templateUrl: './operations.component.html', styleUrls: ['./operations.component.css']})
 export class OperationsComponent implements OnInit {
@@ -27,7 +28,7 @@ export class OperationsComponent implements OnInit {
   cashReceived = 0;
   get balance() { return this.selected ? Math.max(0, Math.round((this.selected.totalAmount - this.selected.payments.filter(p=>p.status==='Captured').reduce((s,p)=>s+p.amount,0))*100)/100) : 0; }
   collectCash() {if(!this.selected||this.busy)return;if(!Number.isFinite(this.cashReceived)||this.cashReceived<this.balance){this.toast.warning('Enter cash received covering the outstanding balance.');return;}const change=this.cashReceived-this.balance;this.busy=true;this.api.processPayment(this.selected.id,{orderId:this.selected.id,tenderType:'Cash',amount:this.balance}).subscribe({next:r=>{this.busy=false;this.selected=r.data||null;this.toast.success(`Cash collected. Change due ${new InrPipe().transform(change)}.`);this.load();},error:e=>this.fail(e)});}
-  constructor(private api: ApiService, private auth: AuthService, private route: ActivatedRoute, private toast: ToastService) {}
+  constructor(private api: ApiService, private auth: AuthService, private route: ActivatedRoute, private toast: ToastService,private documents:DocumentPrintService) {}
   ngOnInit() { this.route.data.subscribe(data => { this.audit = data['audit'] === true; this.page = 1; this.load(); }); }
   can(permission: string) { const user = this.auth.getCurrentUser(); return user?.roleName === 'Owner' || !!user?.permissions?.includes(permission); }
   load() {
@@ -53,11 +54,7 @@ export class OperationsComponent implements OnInit {
       this.busy = false;
       const order = r.data;
       if (!order) { win.close(); return; }
-      const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-      const inr = (n: number) => esc(new InrPipe().transform(n));
-      win.document.title = `ORO receipt ${order.orderNumber}`;
-      win.document.body.innerHTML = `<style>body{font:14px system-ui;max-width:380px;margin:32px auto;color:#0b1b3a}table{width:100%;border-collapse:collapse}td{padding:8px 0;border-bottom:1px solid #ddd}td:last-child{text-align:right}h1{letter-spacing:4px}</style><h1>ORO POS</h1><h3>Transaction receipt</h3><p>${esc(order.orderNumber)} · ${esc(order.status)}</p><p>${esc(order.serviceType)} · Table ${esc(order.tableNumber || '—')}</p><table>${order.orderItems.map(i => `<tr><td>${esc(i.quantity)} × ${esc(i.productName)}</td><td>${inr(i.lineTotal)}</td></tr>`).join('')}</table><p>Subtotal: ${inr(order.subtotal)}</p><p>Discount: ${inr(order.discountAmount)}</p><p>GST: ${inr(order.taxAmount)}</p><h2>Total: ${inr(order.totalAmount)}</h2><p>Thank you. Keep this receipt for your records.</p>`;
-      win.focus(); win.print();
+      try{this.documents.receipt(win,order);}catch(e){win.close();this.toast.error((e as Error).message);}
     }, error: e => { win.close(); this.fail(e); }});
   }
   changePage(delta: number) { this.page = Math.max(1, this.page + delta); this.load(); }

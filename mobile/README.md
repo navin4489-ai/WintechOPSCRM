@@ -1,6 +1,6 @@
-# ORO POS Android 1.3.0
+# Wintech POS Android 1.4.0
 
-Native Flutter workspace with the gold/navy ORO mark. Uses the same API and INR
+Native Flutter workspace with the gold/navy Wintech W mark. Uses the same API and INR
 accounting as the web app, not an embedded web page.
 
 ## Available workflows
@@ -52,6 +52,20 @@ API default: `https://the-bathany.onrender.com/api`. Override only at build time
 with `--dart-define=API_URL=https://your-host/api`. Release Android blocks cleartext HTTP.
 
 Output: `build/app/outputs/flutter-apk/app-release.apk`.
+
+## Branding and customer documents
+
+- Application and launcher branding is **Wintech POS**, using the gold/navy W mark.
+- Receipts, bill previews, sales PDFs, Z-report PDFs and ordering QR posters use
+  **only the relevant outlet's identity**: bold centered name, address, contact.
+- Receipt/shift branding comes from the actual order/shift outlet returned by the
+  server, not a cached operator profile. Sales/QR printing fetches the selected
+  outlet's current details. Missing outlet metadata blocks printing rather than
+  accidentally using another outlet or a platform label.
+- No ordering URL or platform footer is printed beneath the QR code. Copy link
+  remains available separately in outlet administration.
+- Existing internal package/session identifiers and the private signing key are
+  retained for compatibility with installed versions; these are not printed branding.
 
 ## Signing — IMPORTANT
 

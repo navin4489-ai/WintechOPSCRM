@@ -156,15 +156,26 @@ void main() {
   testWidgets('Outlet admin sees own settings but not Super Admin navigation', (
     tester,
   ) async {
-    tester.view.physicalSize=const Size(390,844);tester.view.devicePixelRatio=1;
-    addTearDown(tester.view.resetPhysicalSize);addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = FakeOutletAdmin()..signedIn = true;
     await tester.pumpWidget(MyApp(api: api));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
     expect(find.text('Super Admin'), findsNothing);
-    await tester.scrollUntilVisible(find.text('My Outlet'),150,scrollable:find.descendant(of:find.byType(Drawer),matching:find.byType(Scrollable)).first);
+    await tester.scrollUntilVisible(
+      find.text('My Outlet'),
+      150,
+      scrollable: find
+          .descendant(
+            of: find.byType(Drawer),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(find.text('My Outlet'));
     await tester.pumpAndSettle();
     expect(api.calls, contains('GET /outlet-settings'));
@@ -179,7 +190,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(MyApp(api: FakeApi()));
-    expect(find.text('ORO POS'), findsOneWidget);
+    expect(find.text('Wintech POS'), findsOneWidget);
     expect(find.text('Sign in securely'), findsOneWidget);
     expect(find.text('Admin@123'), findsNothing);
     expect(find.text('admin'), findsNothing);

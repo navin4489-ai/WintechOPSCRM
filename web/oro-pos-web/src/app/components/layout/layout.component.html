@@ -3,9 +3,9 @@
   <!-- Sidebar -->
   <aside class="sidebar" id="app-navigation" [class.open]="menuOpen">
     <div class="brand">
-      <img class="brand-mark" src="oro-logo.svg" alt="ORO POS"/>
+      <img class="brand-mark" src="wintech-logo.svg" alt="Wintech POS"/>
       <div class="brand-text">
-        <span class="brand-name">ORO POS</span>
+        <span class="brand-name">Wintech POS</span>
         <span class="brand-tag">Restaurant Suite</span>
       </div>
     </div>
@@ -68,7 +68,7 @@
   <div class="main">
     <header class="topbar">
       <button class="menu-toggle" aria-label="Open navigation" aria-controls="app-navigation" [attr.aria-expanded]="menuOpen" (click)="menuOpen=!menuOpen">☰</button>
-      <div class="crumb" [title]="user?.outletName">ORO POS · {{ user?.outletName || 'Outlet' }}</div>
+      <div class="crumb" [title]="user?.outletName">Wintech POS · {{ user?.outletName || 'Outlet' }}</div>
       <div class="topbar-right">
         <button type="button" aria-label="Change password" (click)="passwordDialog = true"><span class="full-label">Change password</span><span class="short-label">Password</span></button>
         <span class="clock">{{ now | date:'EEEE, d MMM y' }}</span>

@@ -3,7 +3,7 @@
 ## Verified in this pass
 
 - API and Angular production builds succeed.
-- 89 backend tests pass in Release, including checkout/accounting regression tests in
+- 90 backend tests pass in Release, including checkout/accounting regression tests in
   `backend/ORO_POS.Tests/CheckoutTests.cs`.
 - Checkout persists the platform's existing 5% GST policy, rounded to paise.
 - Discounts update persisted GST/total; sales reports do not deduct discounts twice.
@@ -34,7 +34,7 @@ integration, hardware printing, security isolation, or load capacity.
 ## Hardening and Android release pass
 
 - Native Android 1.1.0 replaces the prototype with role-aware operations screens;
-  9 Flutter/widget tests pass and `flutter analyze` reports no issues.
+  13 Flutter/widget/PDF tests pass and `flutter analyze` reports no issues.
 - Android 1.2.0 adds Super Admin outlet configuration and QR poster printing,
   working-outlet switching and gallery-based item image uploads.
 - Android/web 1.3.0 outlet onboarding creates the outlet and its scoped admin
@@ -48,10 +48,17 @@ integration, hardware printing, security isolation, or load capacity.
   provision outlets. They cannot assign Super Admin or move themselves to a different outlet.
 - Mobile web navigation uses a drawer, layouts stack on narrow viewports, and
   category creation is available on the catalogue page and within the item editor.
-- The Playwright suite contains 16 phone-width browser checks using synthetic API
+- The Playwright suite contains 21 browser/phone-width/print checks using synthetic API
   fixtures. These supplement, not replace, live PostgreSQL authorization checks.
 - Customers can save a private tracking link and see preparation updates every
   15 seconds while the confirmation page is visible. No SMS/WhatsApp is sent.
+- Wintech POS branding replaces the earlier visible platform name and logos.
+  Receipts, bill previews, QR posters, sales and Z-report PDFs are outlet-only:
+  bold centered business name, address and contact. QR layouts print no raw URL.
+- Order/Z-report DTOs carry authoritative outlet identity. Print regression tests
+  deliberately use an outlet different from the Super Admin profile to catch
+  branding leakage between outlets. Receipt, sales, shift, QR and public
+  confirmation PDF generation were checked; this is not physical-printer acceptance.
 - Public, no-login QR ordering supports server-priced carts, retry-safe request IDs,
   private order-status proofs and cash-at-outlet collection by authenticated staff.
   Links can be disabled or rotated. Closed outlets or missing shifts reject new orders.

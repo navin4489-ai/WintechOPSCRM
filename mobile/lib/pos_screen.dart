@@ -610,6 +610,10 @@ class _PosScreenState extends State<PosScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (order!['outletName'] != null) ...[
+          OutletBusinessHeader(outlet: OutletBrand.fromDocument(order!)),
+          const SizedBox(height: 16),
+        ],
         Text(
           '${order!['orderNumber']}',
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),

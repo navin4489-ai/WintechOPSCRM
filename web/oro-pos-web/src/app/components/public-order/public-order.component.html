@@ -1,7 +1,8 @@
-<main class="guest"><header><img src="oro-logo.svg" alt="ORO POS"/><div><strong>{{menu?.outletName||'Welcome'}}</strong><span>Order online · Pay cash at the outlet</span></div></header>
+<main class="guest"><header><img src="wintech-logo.svg" alt="Wintech POS"/><div><strong>{{menu?.outletName||'Welcome'}}</strong><span>Order online · Pay cash at the outlet</span></div></header>
 @if(loading){<section class="card state" role="status">Loading the outlet menu…</section>}
 @if(error){<div class="error" role="alert">{{error}} <button (click)="load()" [disabled]="busy">Refresh menu</button></div>}
 @if(menu){
+<section class="public-print-header"><h1>{{menu.outletName}}</h1><p>{{menu.address||'Address not configured'}}</p><p>Contact: {{menu.phone||'Not configured'}}</p></section>
 <section class="hero"><span>FRESHLY PREPARED FOR YOU</span><h1>{{confirmation?'Thank you for your order':'Your favourites, one scan away.'}}</h1><p>{{menu.address}}</p>@if(menu.phone){<a [href]="'tel:'+menu.phone">{{menu.phone}}</a>}<p>{{menu.paymentInstruction}}</p></section>
 @if(confirmation){<section class="card confirmation"><div class="check">✓</div><h2>Order received</h2><p>Show this pickup code at the counter</p><strong class="pickup">{{confirmation.orderNumber.slice(-8).toUpperCase()}}</strong>
 <p>Preparation: <b>{{confirmation.preparationStatus==='InProgress'?'Preparing':confirmation.preparationStatus||'New'}}</b></p><p>Bill status: <b>{{confirmation.status}}</b></p><h2>{{confirmation.totalAmount | inr}}</h2><p>Subtotal {{confirmation.subtotal|inr}} · GST {{confirmation.taxAmount|inr}}</p><div class="cash">{{confirmation.paymentStatus}}</div>
@@ -21,7 +22,7 @@
 <p class="fine">Shared only with outlet staff for your order. Not shown in public tracking.</p>
 <label>Order notes (optional)<textarea name="notes" [(ngModel)]="notes" (ngModelChange)="changed()" [disabled]="busy" maxlength="500"></textarea></label>
 <p class="cash">Cash payment at outlet only</p><button class="place" type="submit" [disabled]="busy||!menu.acceptingOrders||!customerName.trim()||!customerPhone.trim()">{{busy?'Sending order…':'Place order — pay at outlet'}}</button><p class="fine">Your order is sent to the outlet kitchen. The final total is confirmed by the server. Please order only when you intend to collect and pay.</p></form>}</aside></div>}}
-<footer>Powered by ORO POS · Secure ordering, no online payment</footer>
+<footer>Powered by Wintech · Secure ordering, no online payment</footer>
 @if(cart.length&&!confirmation){<button class="mobile-cart" (click)="viewCart()">View your order · {{cart.length}} items · {{subtotal+tax|inr}}</button>}
 </main>
 @if(selected){<div class="overlay"><form class="item-dialog" (ngSubmit)="add()"><h2>{{selected.name}}</h2><p>{{selected.price|inr}} per item</p><label>Quantity<input type="number" name="quantity" [(ngModel)]="quantity" min="1" max="20" step="1" required/></label>@for(g of selected.modifierGroups;track g.id){<h4>{{g.name}} {{g.isRequired?'(required)':''}}</h4>@for(o of g.options;track o.id){<label class="option"><input type="checkbox" [name]="'modifier_'+o.id" [(ngModel)]="modifiers[o.id]"/> {{o.name}} (+{{o.priceImpact|inr}})</label>}}<label>Item notes<textarea name="itemNotes" [(ngModel)]="itemNotes" maxlength="500"></textarea></label>@if(error){<p class="error">{{error}}</p>}<div class="actions"><button type="button" (click)="selected=null;error=''">Cancel</button><button type="submit">Add to order</button></div></form></div>}

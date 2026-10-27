@@ -60,3 +60,4 @@ tfoot th {
   border-top: 2px solid var(--border-strong);
 }
 tfoot th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.report-actions{display:flex;gap:10px;flex-wrap:wrap}@media(max-width:640px){.report-actions{width:100%}.report-actions button{flex:1}}

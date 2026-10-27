@@ -98,6 +98,7 @@
         <div class="empty-sm"><span class="spin"></span> Generating report…</div>
       } @else if (zReport) {
         <div class="z-body">
+          <header class="z-outlet"><h2>{{zReport.outletName}}</h2><p>{{zReport.outletAddress||'Address not configured'}}</p><p>Contact: {{zReport.outletPhone||'Not configured'}}</p></header>
           <div class="z-meta">
             <span><b>Cashier</b> {{ zReport.userName }}</span>
             <span><b>Shift</b> #{{ zReport.shiftId }}</span>
@@ -122,7 +123,7 @@
       }
       <div class="modal-foot">
         <button class="btn btn-ghost" (click)="closeZReport()">Close</button>
-        <button class="btn btn-primary" onclick="window.print()">Print</button>
+        <button class="btn btn-primary" (click)="printZReport()" [disabled]="!zReport||zLoading">Print / PDF</button>
       </div>
     </div>
   </div>

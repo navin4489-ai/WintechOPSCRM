@@ -17,6 +17,7 @@ mobile/android/.gradle/
 mobile/**/*.apk
 mobile/**/*.aab
 mobile/releases/*.png
+mobile/releases/*.pdf
 
 # IDE / OS
 .vs/
