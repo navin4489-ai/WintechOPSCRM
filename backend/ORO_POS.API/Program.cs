@@ -103,8 +103,17 @@ using (var scope = app.Services.CreateScope())
         {
             if (reset)
             {
-                await db.Database.EnsureDeletedAsync();
-                Console.WriteLine("[Startup] RESET_DB_ON_START=true — existing database dropped.");
+                // Drop the schema rather than the database itself: DROP DATABASE
+                // fails while our own pooled connections are open, whereas a schema
+                // drop always succeeds and clears every table (incl. migrations).
+                var conn = db.Database.GetDbConnection();
+                if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+                await using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                Console.WriteLine("[Startup] RESET_DB_ON_START=true — schema dropped, all data cleared.");
             }
             await db.Database.MigrateAsync();
             Console.WriteLine("[Startup] Database migration applied.");

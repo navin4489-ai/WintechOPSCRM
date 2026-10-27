@@ -19,7 +19,7 @@ COPY --from=build /app/publish .
 COPY web/oro-pos-web/dist/oro-pos-web/browser/ ./wwwroot/
 
 # Render injects $PORT and expects the app to bind 0.0.0.0:$PORT.
-ENV ASPNETCORE_URLS=http://0.0.0.0:10000
+# Expanded at runtime by the shell (a Dockerfile ENV cannot read $PORT).
 EXPOSE 10000
 
-ENTRYPOINT ["dotnet", "ORO_POS.API.dll"]
+CMD ["sh", "-c", "ASPNETCORE_URLS=http://0.0.0.0:${PORT:-10000} exec dotnet ORO_POS.API.dll"]
