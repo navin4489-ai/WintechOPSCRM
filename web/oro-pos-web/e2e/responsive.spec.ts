@@ -98,3 +98,38 @@ test('Customer confirmation Save to PDF hides platform branding and private URL 
   await setup(page);await page.goto('/order/'+'a'.repeat(64));await page.getByRole('button',{name:'Add',exact:true}).click();await page.getByRole('button',{name:'Add to order',exact:true}).click();await page.getByLabel('Your name',{exact:true}).fill('UI guest');await page.getByLabel('Contact number',{exact:true}).fill('9999999999');await page.getByRole('button',{name:'Place order — pay at outlet',exact:true}).click();await expect(page.getByRole('heading',{name:'Order received'})).toBeVisible();const saved=page.url();
   await page.evaluate(()=>window.dispatchEvent(new Event('beforeprint')));expect(page.url()).not.toContain('#track=');await page.emulateMedia({media:'print'});await expect(page.locator('.public-print-header')).toBeVisible();await expect(page.locator('.public-print-header h1')).toHaveText(outlet.name);await expect(page.locator('.guest>footer')).toBeHidden();await expect(page.locator('.guest>header img')).toBeHidden();expect(await page.title()).not.toMatch(/Wintech|ORO/);await page.pdf({path:info.outputPath('customer-confirmation.pdf'),format:'A4'});await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));expect(page.url()).toBe(saved);
 });
+test('Kitchen bell rings for a new order and stops once staff accept it',async({page},info)=>{
+  await setup(page,'StoreManager');
+  const base={orderId:51,orderNumber:'BILL-0051',tableNumber:'7',stationName:'Hot kitchen',priority:0,createdAt:new Date().toISOString(),items:[{orderItemId:1,productName:'Paneer Tikka',quantity:2,status:'New'}]};
+  let tickets:any[]=[{...base,id:91,status:'New'}];
+  await page.route('**/api/kitchentickets**',route=>route.fulfill({json:{success:true,data:tickets}}));
+  await page.goto('/kitchen');
+  const bar=page.locator('.bell-bar');await expect(bar).toBeVisible();
+  await expect(bar).toContainText('1 order(s) waiting');await expect(bar).toHaveClass(/alerting/);await expect(bar).not.toHaveClass(/ringing/);
+  await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('needs-permission');
+  await page.getByRole('button',{name:'Enable bell',exact:true}).click();
+  await expect(bar).toHaveClass(/ringing/);await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('ringing');
+  // Staff accept the order → bell must fall silent immediately on the next refresh.
+  tickets=[{...tickets[0],status:'Accepted'}];
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(bar).not.toHaveClass(/ringing/);await expect(bar).toContainText('no orders waiting');await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('silent');
+  await page.screenshot({path:info.outputPath('kitchen-bell-silent.png'),fullPage:true});
+});
+test('Kitchen bell keeps ringing until every waiting order is accepted and honours mute',async({page})=>{
+  await setup(page,'StoreManager');
+  const mk=(id:number,status:string)=>({id,orderId:id,orderNumber:`BILL-${id}`,tableNumber:'2',stationName:'Cold station',status,priority:0,createdAt:new Date().toISOString(),items:[{orderItemId:id,productName:'Salad',quantity:1,status}]});
+  let tickets:any[]=[mk(11,'New'),mk(12,'New')];
+  await page.route('**/api/kitchentickets**',route=>route.fulfill({json:{success:true,data:tickets}}));
+  await page.goto('/kitchen');await page.getByRole('button',{name:'Enable bell',exact:true}).click();
+  const bar=page.locator('.bell-bar');await expect(bar).toContainText('2 order(s) waiting');await expect(bar).toHaveClass(/ringing/);
+  await page.getByRole('button',{name:'Mute bell',exact:true}).click();
+  await expect(bar).not.toHaveClass(/ringing/);await expect(bar).toContainText('Bell muted');await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('muted');
+  await expect(page.getByRole('button',{name:'Unmute bell',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Unmute bell',exact:true}).click();await expect(bar).toHaveClass(/ringing/);
+  tickets=[mk(11,'Accepted'),mk(12,'New')];
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(bar).toContainText('1 order(s) waiting');await expect(bar).toHaveClass(/ringing/);
+  tickets=[mk(11,'Accepted'),mk(12,'Ready')];
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(bar).not.toHaveClass(/ringing/);await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('silent');
+});

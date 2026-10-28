@@ -1,5 +1,33 @@
 :host { display: block; }
 
+.bell-bar {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  margin-bottom: 1rem;
+  padding: .75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.bell-bar.ringing {
+  border-color: var(--warning);
+  background: #fff8e6;
+  animation: bell-pulse 2.4s ease-in-out infinite;
+}
+.bell-bar.alerting:not(.ringing) { border-color: var(--info); }
+.bell-icon { font-size: 1.4rem; line-height: 1; }
+.bell-text { display: flex; flex-direction: column; gap: .15rem; flex: 1; min-width: 0; }
+.bell-text strong { font-size: .95rem; }
+.bell-text span { font-size: .8rem; color: var(--text-muted); }
+.bell-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+
+@keyframes bell-pulse {
+  0%, 100% { box-shadow: var(--shadow-sm); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, .18); }
+}
+
 .ticket-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

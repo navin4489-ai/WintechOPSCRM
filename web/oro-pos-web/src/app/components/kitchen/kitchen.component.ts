@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
+import { KitchenBellService } from '../../services/kitchen-bell.service';
 import { KitchenTicketDto, ApiResponse } from '../../models';
 
 @Component({
@@ -16,7 +17,12 @@ export class KitchenComponent implements OnInit, OnDestroy {
   ticketColumns: { name: string; tickets: KitchenTicketDto[] }[] = [];
   private poll?: any;
 
-  constructor(private api: ApiService, private auth: AuthService, private toast: ToastService) {}
+  constructor(
+    private api: ApiService,
+    private auth: AuthService,
+    private toast: ToastService,
+    public bell: KitchenBellService
+  ) {}
 
   ngOnInit() {
     this.loadTickets();
@@ -25,6 +31,7 @@ export class KitchenComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.poll) { clearInterval(this.poll); this.poll = undefined; }
+    this.bell.stopAll();
   }
 
   loadTickets() {
@@ -32,6 +39,8 @@ export class KitchenComponent implements OnInit, OnDestroy {
     this.api.getKitchenTickets(outletId).subscribe((res: ApiResponse<KitchenTicketDto[]>) => {
       if (res.success) {
         const tickets = res.data || [];
+        // Ring the bell while orders wait for acceptance; silence once handled.
+        this.bell.update(tickets);
         const stations = [...new Set(tickets.map((t: any) => t.stationName || 'General'))];
         this.ticketColumns = stations.map(name => ({
           name,
@@ -47,4 +56,7 @@ export class KitchenComponent implements OnInit, OnDestroy {
       error: (err) => this.toast.error(err?.error?.errors?.[0] || 'Could not update ticket status.')
     });
   }
+
+  armBell() { this.bell.arm(); }
+  toggleBellMute() { this.bell.toggleMuted(); }
 }

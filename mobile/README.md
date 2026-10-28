@@ -1,4 +1,4 @@
-# Wintech POS Android 1.4.0
+# Wintech POS Android 1.5.0
 
 Native Flutter workspace with the gold/navy Wintech W mark. Uses the same API and INR
 accounting as the web app, not an embedded web page.
@@ -15,6 +15,9 @@ accounting as the web app, not an embedded web page.
 - Paginated order history, audited receipt/reprint and full external refund recording,
   with an explicit physical-stock-return choice.
 - Kitchen station tickets, preparation states, delayed-ticket highlighting and refresh.
+  A new order rings a looping bell (synthesized in code — no audio files) with a
+  waiting-order banner; the bell stops as soon as staff accept or progress the order.
+  Mute/unmute is available without losing the on-screen waiting count.
 - Open/close cash shifts, opening float, counted cash, variance and Z-report viewing.
 - Stock, ledger, receipts/waste/signed adjustments/physical counts, recipe mapping.
 - Catalogue/category/table creation, staff create/edit/deactivation, audit history.

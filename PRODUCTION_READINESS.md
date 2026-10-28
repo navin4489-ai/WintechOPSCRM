@@ -34,7 +34,7 @@ integration, hardware printing, security isolation, or load capacity.
 ## Hardening and Android release pass
 
 - Native Android 1.1.0 replaces the prototype with role-aware operations screens;
-  13 Flutter/widget/PDF tests pass and `flutter analyze` reports no issues.
+  20 Flutter/widget/PDF/bell tests pass and `flutter analyze` reports no issues.
 - Android 1.2.0 adds Super Admin outlet configuration and QR poster printing,
   working-outlet switching and gallery-based item image uploads.
 - Android/web 1.3.0 outlet onboarding creates the outlet and its scoped admin
@@ -48,7 +48,7 @@ integration, hardware printing, security isolation, or load capacity.
   provision outlets. They cannot assign Super Admin or move themselves to a different outlet.
 - Mobile web navigation uses a drawer, layouts stack on narrow viewports, and
   category creation is available on the catalogue page and within the item editor.
-- The Playwright suite contains 21 browser/phone-width/print checks using synthetic API
+- The Playwright suite contains 23 browser/phone-width/print/bell checks using synthetic API
   fixtures. These supplement, not replace, live PostgreSQL authorization checks.
 - Customers can save a private tracking link and see preparation updates every
   15 seconds while the confirmation page is visible. No SMS/WhatsApp is sent.
@@ -62,12 +62,19 @@ integration, hardware printing, security isolation, or load capacity.
 - Public, no-login QR ordering supports server-priced carts, retry-safe request IDs,
   private order-status proofs and cash-at-outlet collection by authenticated staff.
   Links can be disabled or rotated. Closed outlets or missing shifts reject new orders.
+- Kitchen order bell on web KDS and Android: a new order rings a synthesised bell
+  (WebAudio / generated WAV — no audio assets shipped) and the web KDS raises a
+  desktop notification when permission is granted. The bell rings continuously
+  while any ticket still waits in "New" and stops as soon as kitchen staff accept
+  or progress it. Mute is available on both platforms and persists across web
+  sessions; the on-screen waiting count stays visible while muted. Browsers require
+  one "Enable bell" click before audio/notification permission can be requested.
 - QR checkout requires a validated customer contact number. It is included only
   in authenticated staff order notes, not the public confirmation/tracking DTO.
 - Product photos use a dedicated PostgreSQL `ProductImages` table and additive EF
   migration. The API accepts PNG/JPEG/WebP up to 1 MB, checks file signatures and
   outlet permissions, audits changes and serves versioned cacheable image URLs.
-- New gold/navy ORO branding and owner-approved private release signing, HTTPS-only
+- New gold/navy Wintech branding and owner-approved private release signing, HTTPS-only
   Android networking, encrypted credential storage and no default-filled login.
 - API actions re-read the account's active status, permissions and outlet assignment.
   Resource scope, role-escalation prevention, reason/manager approval, receipt audit,
