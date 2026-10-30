@@ -3,8 +3,13 @@
 ## Verified in this pass
 
 - API and Angular production builds succeed.
-- 90 backend tests pass in Release, including checkout/accounting regression tests in
-  `backend/ORO_POS.Tests/CheckoutTests.cs`.
+- 97 backend tests pass in Release, including checkout/accounting regression tests in
+  `backend/ORO_POS.Tests/CheckoutTests.cs` and sign-in tests in
+  `backend/ORO_POS.Tests/AuthLoginTests.cs`.
+- Sign-in accepts **username or email** (email matched case-insensitively only when
+  the identifier contains `@`; an exact username always wins on collision). Inactive
+  or deleted accounts are rejected either way, and both identifiers return the same
+  generic error for a wrong password.
 - Checkout persists the platform's existing 5% GST policy, rounded to paise.
 - Discounts update persisted GST/total; sales reports do not deduct discounts twice.
 - Cash change is excluded from captured revenue; non-cash overpayments are rejected.
@@ -34,7 +39,7 @@ integration, hardware printing, security isolation, or load capacity.
 ## Hardening and Android release pass
 
 - Native Android 1.1.0 replaces the prototype with role-aware operations screens;
-  20 Flutter/widget/PDF/bell tests pass and `flutter analyze` reports no issues.
+  27 Flutter/widget/PDF/bell tests pass and `flutter analyze` reports no issues.
 - Android 1.2.0 adds Super Admin outlet configuration and QR poster printing,
   working-outlet switching and gallery-based item image uploads.
 - Android/web 1.3.0 outlet onboarding creates the outlet and its scoped admin
@@ -48,7 +53,7 @@ integration, hardware printing, security isolation, or load capacity.
   provision outlets. They cannot assign Super Admin or move themselves to a different outlet.
 - Mobile web navigation uses a drawer, layouts stack on narrow viewports, and
   category creation is available on the catalogue page and within the item editor.
-- The Playwright suite contains 23 browser/phone-width/print/bell checks using synthetic API
+- The Playwright suite contains 24 browser/phone-width/print/bell checks using synthetic API
   fixtures. These supplement, not replace, live PostgreSQL authorization checks.
 - Customers can save a private tracking link and see preparation updates every
   15 seconds while the confirmation page is visible. No SMS/WhatsApp is sent.
@@ -67,8 +72,19 @@ integration, hardware printing, security isolation, or load capacity.
   desktop notification when permission is granted. The bell rings continuously
   while any ticket still waits in "New" and stops as soon as kitchen staff accept
   or progress it. Mute is available on both platforms and persists across web
-  sessions; the on-screen waiting count stays visible while muted. Browsers require
-  one "Enable bell" click before audio/notification permission can be requested.
+  sessions and Android restarts; the on-screen waiting count stays visible while
+  muted. Browsers require one "Enable bell" click before audio/notification
+  permission can be requested.
+- On Android the bell is **app-wide**: a `KitchenAlertService` polls the kitchen
+  queue every 5 seconds whenever staff are signed in, so an order arriving while
+  the cashier is on the POS or Orders screen still rings and raises a haptic
+  buzz, with a banner above every screen.
+- **Emergency siren**: when a ticket waits unaccepted for 5 minutes, or 3 tickets
+  pile up at once, both platforms escalate from the plain bell to a two-tone
+  siren (generated WAV / swept WebAudio oscillator), turn the banner red and set
+  `data-kitchen-bell="emergency"`. Muting silences the speaker but the red banner
+  stays until the backlog is cleared. Manual **Test bell** / **Test emergency**
+  buttons on the kitchen screens let staff verify the speaker.
 - QR checkout requires a validated customer contact number. It is included only
   in authenticated staff order notes, not the public confirmation/tracking DTO.
 - Product photos use a dedicated PostgreSQL `ProductImages` table and additive EF

@@ -59,4 +59,13 @@ export class KitchenComponent implements OnInit, OnDestroy {
 
   armBell() { this.bell.arm(); }
   toggleBellMute() { this.bell.toggleMuted(); }
+  testBell() { this.bell.testRing(false); }
+  testEmergency() { this.bell.testRing(true); }
+
+  /** Human-readable age of the oldest still-untouched ticket. */
+  get waitLabel(): string {
+    const s = Math.max(0, this.bell.oldestWaitSeconds);
+    const m = Math.floor(s / 60);
+    return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+  }
 }

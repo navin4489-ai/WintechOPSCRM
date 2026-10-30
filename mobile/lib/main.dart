@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'api_service.dart';
 import 'brand.dart';
+import 'kitchen_bell.dart';
 import 'operations.dart';
 import 'pos_screen.dart';
 import 'ui_helpers.dart';
@@ -185,11 +187,11 @@ class _SignInState extends State<SignIn> {
                               enabled: !busy,
                               autofillHints: const [AutofillHints.username],
                               decoration: const InputDecoration(
-                                labelText: 'Username',
+                                labelText: 'Username or email',
                                 prefixIcon: Icon(Icons.person_outline),
                               ),
                               validator: (v) => v == null || v.trim().isEmpty
-                                  ? 'Enter your username'
+                                  ? 'Enter your username or email'
                                   : null,
                             ),
                             const SizedBox(height: 16),
@@ -273,6 +275,41 @@ class OperationsHome extends StatefulWidget {
 
 class _OperationsHomeState extends State<OperationsHome> {
   String current = 'Overview';
+
+  /// Kitchen bell for the whole app, not just the Kitchen screen: a ticket
+  /// that arrives while staff are on the POS or Orders screen still rings.
+  late final KitchenAlertService kitchenAlert = KitchenAlertService(
+    fetchTickets: () async {
+      final rows = await widget.api.request(
+        '/kitchentickets?outletId=${widget.api.outletId}',
+      );
+      return rows is List ? rows : const [];
+    },
+    secureStorage: const FlutterSecureStorage(),
+  );
+
+  /// The bell only makes sense for accounts tied to an outlet with a kitchen.
+  bool get kitchenBellAllowed {
+    try {
+      widget.api.outletId;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (kitchenBellAllowed) kitchenAlert.start();
+  }
+
+  @override
+  void dispose() {
+    kitchenAlert.disposeService();
+    super.dispose();
+  }
+
   Future<void> changePassword() async {
     final values = await askForm(
       context,
@@ -442,13 +479,113 @@ class _OperationsHomeState extends State<OperationsHome> {
             const SizedBox(width: 12),
           ],
         ),
-        body: Row(
+        body: Column(
           children: [
-            if (wide) SizedBox(width: 250, child: navigation(true)),
-            Expanded(child: SafeArea(child: body)),
+            // App-wide kitchen bell: visible on every screen, not only the
+            // Kitchen module.
+            ListenableBuilder(
+              listenable: kitchenAlert,
+              builder: (context, _) => kitchenBanner(),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  if (wide) SizedBox(width: 250, child: navigation(true)),
+                  Expanded(child: SafeArea(child: body)),
+                ],
+              ),
+            ),
           ],
         ),
       );
     },
   );
+
+  Widget kitchenBanner() {
+    final alert = kitchenAlert;
+    if (!alert.running) return const SizedBox.shrink();
+    // Idle outside the Kitchen screen: no need to take space from the POS.
+    if (alert.pending == 0 && current != 'Kitchen') return const SizedBox.shrink();
+    final emergency = alert.emergency;
+    final waiting = alert.pending > 0;
+    final bg = emergency
+        ? const Color(0xffb3261e)
+        : waiting
+        ? const Color(0xff8a5300)
+        : const Color(0xff2f4a7a);
+    final waited = Duration(seconds: alert.oldestWaitSeconds);
+    final waitLabel = waited.inMinutes > 0
+        ? '${waited.inMinutes}m ${waited.inSeconds % 60}s'
+        : '${waited.inSeconds}s';
+    return Material(
+      color: bg,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                emergency
+                    ? Icons.warning_amber_rounded
+                    : waiting
+                    ? Icons.notifications_active
+                    : Icons.notifications_none,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      emergency
+                          ? 'KITCHEN EMERGENCY — ${alert.pending} order${alert.pending == 1 ? '' : 's'} waiting'
+                          : waiting
+                          ? '${alert.pending} order${alert.pending == 1 ? '' : 's'} in the kitchen — bell ${alert.muted ? 'muted' : 'ringing'}'
+                          : 'Kitchen bell ready — no orders waiting',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      waiting
+                          ? 'Oldest waiting $waitLabel. The bell stops once staff accept the order.'
+                          : 'New orders ring automatically, even on other screens.',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (current == 'Kitchen') ...[
+                TextButton(
+                  onPressed: () => kitchenAlert.testRing(),
+                  child: const Text(
+                    'Test bell',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => kitchenAlert.testRing(emergency: true),
+                  child: const Text(
+                    'Test emergency',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+              TextButton(
+                onPressed: () => kitchenAlert.setMuted(!alert.muted),
+                child: Text(
+                  alert.muted ? 'Unmute' : 'Mute',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

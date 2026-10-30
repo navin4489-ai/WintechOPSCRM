@@ -133,3 +133,30 @@ test('Kitchen bell keeps ringing until every waiting order is accepted and honou
   await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(bar).not.toHaveClass(/ringing/);await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('silent');
 });
+test('Kitchen bell escalates to an emergency siren once an order waits too long',async({page})=>{
+  await setup(page,'StoreManager');
+  const mk=(id:number,status:string,createdAt:string)=>({id,orderId:id,orderNumber:`BILL-${id}`,tableNumber:'4',stationName:'Hot kitchen',status,priority:0,createdAt,items:[{orderItemId:id,productName:'Dal Makhani',quantity:1,status}]});
+  // A ticket that has already been ignored for over five minutes.
+  const stale=new Date(Date.now()-6*60*1000).toISOString();
+  let tickets:any[]=[mk(21,'New',stale)];
+  await page.route('**/api/kitchentickets**',route=>route.fulfill({json:{success:true,data:tickets}}));
+  await page.goto('/kitchen');
+  const bar=page.locator('.bell-bar');
+  await page.getByRole('button',{name:'Enable bell',exact:true}).click();
+  // Emergency state: red banner, siren, and the dataset mirrored for checks.
+  await expect(bar).toHaveClass(/emergency/);await expect(bar).toContainText('KITCHEN EMERGENCY');
+  await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('emergency');
+  // Three waiting orders escalate immediately even when each is fresh.
+  const fresh=new Date().toISOString();
+  tickets=[mk(22,'New',fresh),mk(23,'New',fresh),mk(24,'New',fresh)];
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(bar).toHaveClass(/emergency/);await expect(bar).toContainText('3 order(s)');
+  // Accepting the backlog clears the emergency back to a plain bell.
+  tickets=[mk(22,'Accepted',fresh),mk(23,'Accepted',fresh),mk(24,'Accepted',fresh)];
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(bar).not.toHaveClass(/emergency/);await expect(bar).not.toHaveClass(/ringing/);
+  await expect.poll(()=>page.evaluate(()=>document.body.dataset['kitchenBell'])).toBe('silent');
+  // The manual siren check is offered so staff can verify the speaker.
+  await expect(page.getByRole('button',{name:'Test emergency',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Test emergency',exact:true}).click();
+});

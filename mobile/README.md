@@ -5,7 +5,8 @@ accounting as the web app, not an embedded web page.
 
 ## Available workflows
 
-- Secure sign-in, encrypted token storage, expiry handling, sign-out and password change.
+- Secure sign-in with username **or** email, encrypted token storage, expiry handling,
+  sign-out and password change.
 - Role-aware navigation and assigned-outlet scope (also enforced by the API).
 - Dashboard, table ordering, takeaway/quick-service/retail sales, catalogue/category search,
   keyboard/USB barcode input, quantity, kitchen notes and modifier selections.
@@ -18,6 +19,11 @@ accounting as the web app, not an embedded web page.
   A new order rings a looping bell (synthesized in code — no audio files) with a
   waiting-order banner; the bell stops as soon as staff accept or progress the order.
   Mute/unmute is available without losing the on-screen waiting count.
+- The kitchen bell is app-wide: a background poll rings it (and buzzes the phone)
+  even when you are on the POS, Orders or any other screen. If a ticket is ignored
+  for 5 minutes — or three pile up at once — it escalates to a two-tone emergency
+  siren with a red banner; **Test bell** / **Test emergency** buttons on the banner
+  let staff confirm the speaker works.
 - Open/close cash shifts, opening float, counted cash, variance and Z-report viewing.
 - Stock, ledger, receipts/waste/signed adjustments/physical counts, recipe mapping.
 - Catalogue/category/table creation, staff create/edit/deactivation, audit history.

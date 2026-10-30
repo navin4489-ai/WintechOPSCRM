@@ -10,17 +10,21 @@
     </button>
   </div>
 
-  <div class="bell-bar" [class.ringing]="bell.ringing" [class.alerting]="bell.pendingCount>0">
-    <span class="bell-icon" aria-hidden="true">{{ bell.ringing ? '🔔' : '🔕' }}</span>
+  <div class="bell-bar" [class.ringing]="bell.ringing" [class.emergency]="bell.emergencyActive" [class.alerting]="bell.pendingCount>0">
+    <span class="bell-icon" aria-hidden="true">{{ bell.emergencyActive ? '🚨' : (bell.ringing ? '🔔' : '🔕') }}</span>
     <div class="bell-text">
-      <strong>{{ bell.pendingCount ? bell.pendingCount + ' order(s) waiting' : 'Bell silent — no orders waiting' }}</strong>
-      <span *ngIf="bell.pendingCount && bell.state==='ringing'">Ringing now — it stops as soon as kitchen staff accept or progress the order.</span>
-      <span *ngIf="bell.pendingCount && bell.state==='needs-permission'">Enable the bell so new orders ring and raise a notification.</span>
-      <span *ngIf="bell.pendingCount && bell.state==='muted'">Bell muted — orders are still waiting. Unmute to hear them.</span>
+      <strong *ngIf="bell.emergencyActive">KITCHEN EMERGENCY — {{ bell.pendingCount }} order(s) waiting too long</strong>
+      <strong *ngIf="!bell.emergencyActive">{{ bell.pendingCount ? bell.pendingCount + ' order(s) waiting' : 'Bell silent — no orders waiting' }}</strong>
+      <span *ngIf="bell.emergencyActive">Oldest order waiting {{ waitLabel }} — start it now.</span>
+      <span *ngIf="!bell.emergencyActive && bell.pendingCount && bell.state==='ringing'">Ringing now — it stops as soon as kitchen staff accept or progress the order.</span>
+      <span *ngIf="!bell.emergencyActive && bell.pendingCount && bell.state==='needs-permission'">Enable the bell so new orders ring and raise a notification.</span>
+      <span *ngIf="!bell.emergencyActive && bell.pendingCount && bell.state==='muted'">Bell muted — orders are still waiting. Unmute to hear them.</span>
       <span *ngIf="!bell.pendingCount">New orders will ring the bell and raise a notification.</span>
     </div>
     <div class="bell-actions">
       <button *ngIf="!bell.armed" class="btn-primary" (click)="armBell()">Enable bell</button>
+      <button *ngIf="bell.armed" class="btn-secondary" (click)="testBell()">Test bell</button>
+      <button *ngIf="bell.armed" class="btn-secondary" (click)="testEmergency()">Test emergency</button>
       <button *ngIf="bell.armed" class="btn-secondary" (click)="toggleBellMute()">{{ bell.muted ? 'Unmute bell' : 'Mute bell' }}</button>
     </div>
   </div>

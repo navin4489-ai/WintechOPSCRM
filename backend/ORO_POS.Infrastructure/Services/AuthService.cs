@@ -26,10 +26,23 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
+        // Staff may sign in with either their username or their email address.
+        // Match username first (exact), then fall back to a case-insensitive
+        // email lookup so "kitchen@krishna.com" works as a login ID.
+        var identifier = request.Username.Trim();
         var user = await _db.Users
             .Include(u => u.Role)
             .Include(u => u.Outlet)
-            .FirstOrDefaultAsync(u => u.Username == request.Username && u.IsActive && !u.IsDeleted);
+            .FirstOrDefaultAsync(u => u.Username == identifier && u.IsActive && !u.IsDeleted);
+
+        if (user == null && identifier.Contains('@'))
+        {
+            var lowered = identifier.ToLower();
+            user = await _db.Users
+                .Include(u => u.Role)
+                .Include(u => u.Outlet)
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == lowered && u.IsActive && !u.IsDeleted);
+        }
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedAccessException("Invalid username or password.");

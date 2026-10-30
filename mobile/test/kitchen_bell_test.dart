@@ -90,6 +90,94 @@ void main() {
     });
   });
 
+  group('KitchenAlert emergency escalation', () {
+    final fixedNow = DateTime(2026, 1, 1, 12, 0, 0);
+    Map<String, dynamic> aged(int id, int secondsOld) => {
+      'id': id,
+      'orderNumber': 'ORD-$id',
+      'status': 'New',
+      'createdAt': fixedNow.subtract(Duration(seconds: secondsOld)).toIso8601String(),
+    };
+
+    test('A fresh order rings the normal bell, not the siren', () {
+      final alert = KitchenAlert(clock: () => fixedNow);
+      alert.update([aged(1, 30)]);
+      expect(alert.ringing, isTrue);
+      expect(alert.emergency, isFalse);
+    });
+
+    test('Escalates to emergency once a ticket waits 5 minutes', () {
+      final alert = KitchenAlert(clock: () => fixedNow);
+      alert.update([aged(1, 4 * 60)]);
+      expect(alert.emergency, isFalse, reason: 'still inside the grace window');
+
+      alert.update([aged(1, 5 * 60 + 1)]);
+      expect(alert.emergency, isTrue, reason: 'ignored too long — siren');
+      expect(alert.oldestWaitSeconds, greaterThanOrEqualTo(300));
+    });
+
+    test('Three or more waiting orders escalate immediately', () {
+      final alert = KitchenAlert(clock: () => fixedNow);
+      alert.update([aged(1, 5), aged(2, 4), aged(3, 3)]);
+      expect(alert.pending, 3);
+      expect(alert.emergency, isTrue, reason: 'a pile-up forces the siren');
+    });
+
+    test('Emergency clears as soon as the backlog is handled', () {
+      final alert = KitchenAlert(clock: () => fixedNow);
+      alert.update([aged(1, 10 * 60)]);
+      expect(alert.emergency, isTrue);
+
+      alert.update([{'id': 1, 'status': 'Accepted', 'createdAt': aged(1, 10 * 60)['createdAt']}]);
+      expect(alert.emergency, isFalse);
+      expect(alert.ringing, isFalse);
+    });
+
+    test('A ticket with no createdAt never escalates on age', () {
+      final alert = KitchenAlert(clock: () => fixedNow);
+      alert.update([ticket(1, 'New')]);
+      expect(alert.ringing, isTrue);
+      expect(alert.emergency, isFalse);
+      expect(alert.oldestWaitSeconds, 0);
+    });
+
+    test('Mute silences even during an emergency', () {
+      final alert = KitchenAlert(clock: () => fixedNow);
+      alert.update([aged(1, 10 * 60)]);
+      expect(alert.emergency, isTrue);
+      expect(alert.ringing, isTrue);
+
+      alert.setMuted(true);
+      expect(alert.ringing, isFalse, reason: 'muted means silent');
+      expect(alert.emergency, isTrue, reason: 'the red banner still warns');
+    });
+  });
+
+  group('buildSirenWav', () {
+    test('Produces a valid WAV distinct from the normal bell', () {
+      final bytes = buildSirenWav(seconds: 0.5, sampleRate: 8000);
+      expect(bytes.sublist(0, 4), 'RIFF'.codeUnits);
+      expect(bytes.sublist(8, 12), 'WAVE'.codeUnits);
+      final view = ByteData.sublistView(bytes);
+      expect(view.getUint32(24, Endian.little), 8000);
+      final dataSize = view.getUint32(40, Endian.little);
+      expect(dataSize, (0.5 * 8000).round() * 2);
+
+      // The siren is loud and does not decay away like the bell strike.
+      final peak = _peak(bytes, from: 44, to: bytes.length);
+      expect(peak, greaterThan(5000), reason: 'the siren is unmistakable');
+
+      // Zero crossings reveal the pitch sweeping between two tones.
+      final crossings = _zeroCrossings(bytes, from: 44, to: 44 + 4000 * 2);
+      final bellCrossings = _zeroCrossings(
+        buildBellWav(seconds: 0.5, sampleRate: 8000),
+        from: 44,
+        to: 44 + 4000 * 2,
+      );
+      expect(crossings, greaterThan(bellCrossings), reason: 'siren is higher pitched');
+    });
+  });
+
   group('buildBellWav', () {
     test('Produces a valid mono 16-bit PCM WAV with a decaying strike', () {
       final bytes = buildBellWav(seconds: 0.5, sampleRate: 8000);
@@ -118,6 +206,18 @@ void main() {
       expect(lastMs, lessThan(firstMs ~/ 4), reason: 'sound decays to silence');
     });
   });
+}
+
+int _zeroCrossings(Uint8List bytes, {required int from, required int to}) {
+  final view = ByteData.sublistView(bytes);
+  var count = 0;
+  var previous = view.getInt16(from, Endian.little);
+  for (var i = from + 2; i < to; i += 2) {
+    final sample = view.getInt16(i, Endian.little);
+    if ((previous >= 0) != (sample >= 0)) count++;
+    previous = sample;
+  }
+  return count;
 }
 
 int _peak(Uint8List bytes, {required int from, required int to}) {

@@ -192,11 +192,12 @@ void main() {
     await tester.pumpWidget(MyApp(api: FakeApi()));
     expect(find.text('Wintech POS'), findsOneWidget);
     expect(find.text('Sign in securely'), findsOneWidget);
+    expect(find.text('Username or email'), findsOneWidget);
     expect(find.text('Admin@123'), findsNothing);
     expect(find.text('admin'), findsNothing);
     await tester.tap(find.text('Sign in securely'));
     await tester.pumpAndSettle();
-    expect(find.text('Enter your username'), findsOneWidget);
+    expect(find.text('Enter your username or email'), findsOneWidget);
     expect(find.text('Enter your password'), findsOneWidget);
   });
   testWidgets('Phone sign-in fits without layout overflow', (tester) async {

@@ -16,7 +16,13 @@
   background: #fff8e6;
   animation: bell-pulse 2.4s ease-in-out infinite;
 }
-.bell-bar.alerting:not(.ringing) { border-color: var(--info); }
+.bell-bar.emergency {
+  border-color: var(--danger, #d32f2f);
+  background: #fdecea;
+  color: #8c1d18;
+  animation: bell-pulse 1.2s ease-in-out infinite;
+}
+.bell-bar.alerting:not(.ringing):not(.emergency) { border-color: var(--info); }
 .bell-icon { font-size: 1.4rem; line-height: 1; }
 .bell-text { display: flex; flex-direction: column; gap: .15rem; flex: 1; min-width: 0; }
 .bell-text strong { font-size: .95rem; }

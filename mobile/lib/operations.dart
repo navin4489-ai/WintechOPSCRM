@@ -9,7 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import 'api_service.dart';
 import 'brand.dart';
 import 'currency.dart';
-import 'kitchen_bell.dart';
 import 'ui_helpers.dart';
 import 'pos_screen.dart';
 
@@ -29,8 +28,6 @@ class OperationsScreen extends StatefulWidget {
 
 class _OperationsScreenState extends State<OperationsScreen> {
   Timer? kitchenPoll;
-  KitchenAlert? bellAlert;
-  final KitchenBell bellAudio = KitchenBell();
   bool fetching = false;
   bool loading = true, busy = false;
   String? error;
@@ -45,20 +42,8 @@ class _OperationsScreenState extends State<OperationsScreen> {
   @override
   void initState() {
     super.initState();
-    if (module == 'Kitchen') {
-      // Ring while orders wait for acceptance; stop the moment staff act.
-      bellAlert = KitchenAlert(
-        onSignal: (ringing) {
-          if (!mounted) return;
-          if (ringing) {
-            bellAudio.ring();
-          } else {
-            bellAudio.stop();
-          }
-          setState(() {});
-        },
-      );
-    }
+    // The ringing itself is owned by the app-wide KitchenAlertService in
+    // main.dart; here we only keep the ticket list on screen fresh.
     load();
     if (module == 'Kitchen') {
       kitchenPoll = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -70,7 +55,6 @@ class _OperationsScreenState extends State<OperationsScreen> {
   @override
   void dispose() {
     kitchenPoll?.cancel();
-    bellAudio.dispose();
     super.dispose();
   }
 
@@ -119,7 +103,6 @@ class _OperationsScreenState extends State<OperationsScreen> {
               ? result['items']
               : [];
         });
-        if (module == 'Kitchen') bellAlert?.update(rows);
       }
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -1264,63 +1247,6 @@ class _OperationsScreenState extends State<OperationsScreen> {
     };
   }
 
-  Widget kitchenBanner() {
-    final alert = bellAlert;
-    if (alert == null) return const SizedBox.shrink();
-    final ringing = alert.ringing;
-    final waiting = alert.pending;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Card(
-        color: ringing ? const Color(0xfffff6e0) : canvas,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Icon(
-                ringing ? Icons.notifications_active : Icons.notifications_none,
-                color: ringing ? const Color(0xffb46d28) : null,
-                size: 30,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      waiting > 0
-                          ? '$waiting order${waiting == 1 ? '' : 's'} waiting — bell ${ringing ? 'ringing' : 'muted'}'
-                          : 'Bell silent — no orders waiting',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      waiting > 0
-                          ? 'The bell stops as soon as you accept or progress the order.'
-                          : 'New orders ring the bell until kitchen staff accept them.',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xff5d6b85),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: busy
-                    ? null
-                    : () {
-                        alert.setMuted(!alert.muted);
-                        setState(() {});
-                      },
-                child: Text(alert.muted ? 'Unmute bell' : 'Mute bell'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget kitchenCard(Json ticket) {
     final age = DateTime.now()
         .difference(DateTime.parse(ticket['createdAt']).toLocal())
@@ -1513,7 +1439,6 @@ class _OperationsScreenState extends State<OperationsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Wrap(spacing: 8, runSpacing: 8, children: tools),
                     ),
-                  if (module == 'Kitchen') kitchenBanner(),
                   if (module == 'Orders')
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
