@@ -52,17 +52,17 @@ test('QR phone checkout and private preparation tracking fit 390px',async({page}
   await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(page.locator('.confirmation')).toContainText('Ready');await expect(page.locator('.confirmation')).not.toContainText('9999999999');await fits(page);await page.screenshot({path:info.outputPath('customer-tracking-390.png'),fullPage:true});
   const savedLink=page.url();const reopened=await page.context().newPage();await reopened.setViewportSize({width:390,height:844});await setup(reopened);await reopened.goto(savedLink);await expect(reopened.locator('.confirmation')).toContainText('Ready');await fits(reopened);await reopened.close();
 });
+const FULL_CATEGORIES=['Starters (Veg)','Starters (Non-Veg)','Main Course (Veg)','Main Course (Non-Veg)','Breads','Rice & Biryani','Sweets (Mithai)','Beverages','Soups & Salads','Desserts'];
+const FULL_PRODUCTS=FULL_CATEGORIES.flatMap((c,ci)=>Array.from({length:6},(_,i)=>({id:ci*10+i+1,outletId:10,categoryId:ci+1,categoryName:c,name:`${c} item ${i+1}`,sku:`KRI-${ci}-${i}`,price:90+ci*40,isAvailable:true,description:'Seeded menu item with a realistic description of the dish served here.',modifierGroups:[]})));
+async function mockFullMenu(page:Page){await page.route('**/api/public/outlets/**/menu',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,data:{outletName:outlet.name,address:outlet.address,phone:outlet.phone,currency:'INR',acceptingOrders:true,paymentInstruction:'Pay cash at the outlet.',products:FULL_PRODUCTS}})}));}
 for(const width of [360,390,768,1280]){
   // A real outlet menu has ~10 category pills whose combined min-content is wider
   // than any phone; the layout must shrink and let that row scroll on its own.
   test(`Public QR menu with a full category list fits ${width}px`,async({page},info)=>{
-    await page.setViewportSize({width,height:844});await setup(page);
-    const names=['Starters (Veg)','Starters (Non-Veg)','Main Course (Veg)','Main Course (Non-Veg)','Breads','Rice & Biryani','Sweets (Mithai)','Beverages','Soups & Salads','Desserts'];
-    const products=names.flatMap((c,ci)=>Array.from({length:6},(_,i)=>({id:ci*10+i+1,outletId:10,categoryId:ci+1,categoryName:c,name:`${c} item ${i+1}`,sku:`KRI-${ci}-${i}`,price:90+ci*40,isAvailable:true,description:'Seeded menu item with a realistic description of the dish served here.',modifierGroups:[]})));
-    await page.route('**/api/public/outlets/**/menu',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,data:{outletName:outlet.name,address:outlet.address,phone:outlet.phone,currency:'INR',acceptingOrders:true,paymentInstruction:'Pay cash at the outlet.',products}})}));
+    await page.setViewportSize({width,height:844});await setup(page);await mockFullMenu(page);
     await page.goto('/order/'+'a'.repeat(64));
-    await expect(page.locator('.categories button')).toHaveCount(names.length+1);
-    await expect(page.locator('.products .product')).toHaveCount(products.length);
+    await expect(page.locator('.categories button')).toHaveCount(FULL_CATEGORIES.length+1);
+    await expect(page.locator('.products .product')).toHaveCount(FULL_PRODUCTS.length);
     // The menu column must not be forced to the pill row's min-content width.
     const menuBox=await page.locator('.order-layout > section').evaluate(e=>Math.round(e.getBoundingClientRect().width));
     expect(menuBox).toBeLessThanOrEqual(width+1);
@@ -73,6 +73,33 @@ for(const width of [360,390,768,1280]){
     await page.screenshot({path:info.outputPath(`public-menu-${width}.png`),fullPage:false});
   });
 }
+test('Cart stays one tap away while browsing a long menu on a phone',async({page},info)=>{
+  await page.setViewportSize({width:390,height:844});await setup(page);await mockFullMenu(page);
+  await page.goto('/order/'+'a'.repeat(64));
+  await expect(page.locator('.products .product')).toHaveCount(FULL_PRODUCTS.length);
+  // Add an item without leaving the top of a 60-item list.
+  await page.getByRole('button',{name:'Add',exact:true}).first().click();
+  await page.getByRole('button',{name:'Add to order',exact:true}).click();
+  // The card reports what is already picked, and the floating cart bar appears.
+  await expect(page.locator('.in-order')).toHaveCount(1);await expect(page.locator('.in-order')).toContainText('in your order');
+  const bar=page.locator('.mobile-cart');await expect(bar).toBeVisible();await expect(bar).toContainText('1 items');await expect(bar).toContainText('₹');
+  // The bar raises a bottom sheet over the menu instead of scrolling to page bottom.
+  await bar.click();await expect(page.locator('.cart')).toHaveClass(/open/);await page.waitForTimeout(350);
+  const box=await page.locator('.cart').boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);expect(box!.y+box!.height).toBeLessThanOrEqual(844);
+  await expect(page.locator('.cart-backdrop')).toBeVisible();await expect(bar).toBeHidden();
+  await expect(page.locator('.cart .totals')).toContainText('Estimated total');
+  await expect(page.locator('.cart-close')).toBeVisible();await fits(page);
+  // Checkout lives inside the sheet, so it is reachable without scrolling.
+  await page.getByLabel('Your name',{exact:true}).fill('Cart guest');await page.getByLabel('Contact number',{exact:true}).fill('9999999999');await fits(page);
+  await page.getByRole('button',{name:'Close cart',exact:true}).click();
+  await expect(page.locator('.cart')).not.toHaveClass(/open/);await expect(bar).toBeVisible();await fits(page);
+  // Escape closes it too, and the cart survives a refresh.
+  await bar.click();await page.keyboard.press('Escape');await expect(page.locator('.cart')).not.toHaveClass(/open/);
+  await page.reload();await expect(bar).toBeVisible();await expect(bar).toContainText('1 items');
+  await bar.click();await expect(page.locator('.cart')).toContainText('1 ×');
+  await page.screenshot({path:info.outputPath('cart-sheet-390.png'),fullPage:false});
+});
 for(const path of ['/dashboard','/pos','/orders','/inventory','/menu','/staff','/reports','/shifts'])test(`Operational page ${path} fits 390px`,async({page})=>{
   await page.setViewportSize({width:390,height:844});await setup(page,'StoreManager');await page.goto(path);await expect(page.locator('.content')).toBeVisible();await page.waitForTimeout(500);await fits(page);
 });

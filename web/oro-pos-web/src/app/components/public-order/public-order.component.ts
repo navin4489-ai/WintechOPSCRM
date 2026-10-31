@@ -12,6 +12,7 @@ export class PublicOrderComponent implements OnInit,OnDestroy {
   key=''; menu:any=null; loading=true; busy=false; error='';
   cart:CartLine[]=[]; customerName=''; customerPhone=''; notes=''; requestId=''; confirmation:any=null;
   search=''; category='All'; selected:ProductDto|null=null; quantity=1; itemNotes=''; modifiers:Record<number,boolean>={};
+  cartOpen=false;
   private poll?:ReturnType<typeof setInterval>;
   lastUpdated:Date|null=null;statusNote='';
   private printLocation:string|null=null;
@@ -44,12 +45,18 @@ export class PublicOrderComponent implements OnInit,OnDestroy {
     const digits=this.customerPhone.replace(/[^0-9]/g,'');if(digits.length<7||digits.length>15){this.error='Enter a valid contact number with 7–15 digits.';return;}
     this.busy=true;this.error='';if(!this.requestId)this.requestId=crypto.randomUUID();this.persist();
     this.api.placeGuestOrder(this.key,{requestId:this.requestId,customerName:this.customerName.trim(),customerPhone:this.customerPhone.trim(),notes:this.notes,items:this.cart.map(i=>({productId:i.productId,quantity:i.quantity,notes:i.notes,modifierOptionIds:i.modifierOptionIds}))}).subscribe({
-      next:r=>{this.busy=false;this.confirmation=r.data;this.cart=[];this.customerPhone='';this.lastUpdated=new Date();this.persist();this.titleForOutlet();history.replaceState(null,'',this.trackingUrl);},
+      next:r=>{this.busy=false;this.confirmation=r.data;this.cart=[];this.customerPhone='';this.cartOpen=false;this.lastUpdated=new Date();this.persist();this.titleForOutlet();history.replaceState(null,'',this.trackingUrl);},
       error:e=>{this.busy=false;this.error=this.message(e)+' If the connection was interrupted, retry the same cart; your request key prevents duplicate orders.';}
     });
   }
   refreshStatus(silent=false){if(this.busy||!this.confirmation)return;this.busy=true;this.api.trackGuestOrder(this.key,this.confirmation.orderNumber,this.confirmation.trackingProof).subscribe({next:r=>{this.busy=false;this.confirmation=r.data;this.lastUpdated=new Date();this.statusNote='';if(!this.menu)this.menu={outletName:r.data?.outletName,phone:r.data?.outletPhone,products:[],acceptingOrders:false,paymentInstruction:'Cash payments are handled at the outlet.'};this.persist();this.titleForOutlet();history.replaceState(null,'',this.trackingUrl);},error:e=>{this.busy=false;if(silent)this.statusNote='Status refresh is temporarily unavailable. We will retry automatically.';else this.error=this.message(e);}});}
   another(){this.confirmation=null;this.requestId='';this.cart=[];this.notes='';this.statusNote='';history.replaceState(null,'',location.pathname);this.persist();this.load();}
-  viewCart(){document.querySelector('.cart')?.scrollIntoView({behavior:'smooth',block:'start'});}
+  viewCart(){this.cartOpen=true;}
+  closeCart(){this.cartOpen=false;}
+  @HostListener('document:keydown.escape') escapeCart(){this.closeCart();}
+  // How many of this item are already in the order — shown on the card so a
+  // long menu still tells the customer what they have picked.
+  qtyIn(productId:number):number{const line=this.cart.find(i=>i.productId===productId);return line?line.quantity:0;}
+  get cartCount():number{return this.cart.reduce((s,i)=>s+i.quantity,0);}
   message(e:any){return e?.status===429?'Too many requests. Please wait a minute and try again.':e?.error?.errors?.[0]||'Unable to reach the outlet. Please refresh or contact the outlet.';}
 }
