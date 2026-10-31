@@ -140,6 +140,30 @@ integration, hardware printing, security isolation, or load capacity.
 - No real product photo was overwritten, and no existing user's cash shift was
   opened, closed or changed during these checks.
 
+## Krishana Outlet menu seed (31 October 2026)
+
+- `scripts/seed-krishana-menu.py` (data + idempotent seeder) and `scripts/tilegen.py`
+  (Pillow tile generator, `format_inr` lakh/crore formatter) populate Krishana Outlet
+  (id 2) with **10 categories and 95 items** — standard Indian restaurant menu plus
+  sweets (starters, main course, breads, rice/biryani, mithai, beverages, soups/salads),
+  realistic INR prices from ₹20 to ₹650 that the outlet admin can edit in the app.
+- Every item carries an image: a generated branded gradient tile (1200×800 JPEG,
+  item name + gold ₹ price, category colour hue-shifted per item) uploaded through
+  the product-image endpoint into PostgreSQL. Real photos can replace any tile later
+  from the app's gallery upload. The two pre-existing dishes (Sahi Paneer, Palak
+  Paneer) were kept in their `main course` category and given tiles, not duplicated.
+- Tiles are drawn landscape with the text in a centre band so it survives every
+  `object-fit: cover` / `BoxFit.cover` crop: web POS ~1.8:1, public QR menu ~1.3:1,
+  Android POS ~2.5:1 and the 1:1 catalogue thumbnail.
+- The seeder is safe to re-run (existing categories, SKUs and images are skipped);
+  `--force-images` regenerates and re-uploads every tile after a design change.
+- Live checks: `GET /api/products?outletId=2&availableOnly=false` → 95/95 items with
+  `imageUrl`; the anonymous public QR menu returned all 95 products with 0 missing
+  images and `acceptingOrders: true`; an image GET returned `200 image/jpeg` with an
+  `ETag` (and a new `v=` hash after the re-upload).
+- Fixed the public QR menu hero heading, which inherited the dark global `h1` colour
+  on the navy gradient and was unreadable; it is now white.
+
 ## Release blockers / remaining acceptance work
 
 - Perform a full role-by-role authorization and outlet-isolation review of every API,

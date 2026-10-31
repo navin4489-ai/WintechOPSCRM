@@ -29,6 +29,10 @@ mobile/releases/*.pdf
 .DS_Store
 Thumbs.db
 
+# Menu seeding scratch (scripts/tilegen.py previews and bytecode)
+**/__pycache__/
+**/.tile-preview/
+
 # Logs & local env
 *.log
 appsettings.Development.json
