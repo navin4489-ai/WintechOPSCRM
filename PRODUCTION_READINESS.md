@@ -53,8 +53,9 @@ integration, hardware printing, security isolation, or load capacity.
   provision outlets. They cannot assign Super Admin or move themselves to a different outlet.
 - Mobile web navigation uses a drawer, layouts stack on narrow viewports, and
   category creation is available on the catalogue page and within the item editor.
-- The Playwright suite contains 24 browser/phone-width/print/bell checks using synthetic API
-  fixtures. These supplement, not replace, live PostgreSQL authorization checks.
+- The Playwright suite contains 28 browser/phone-width/print/bell checks using synthetic API
+  fixtures, including a full-category public menu layout check at 360/390/768/1280px.
+  These supplement, not replace, live PostgreSQL authorization checks.
 - Customers can save a private tracking link and see preparation updates every
   15 seconds while the confirmation page is visible. No SMS/WhatsApp is sent.
 - Wintech POS branding replaces the earlier visible platform name and logos.
@@ -163,6 +164,24 @@ integration, hardware printing, security isolation, or load capacity.
   `ETag` (and a new `v=` hash after the re-upload).
 - Fixed the public QR menu hero heading, which inherited the dark global `h1` colour
   on the navy gradient and was unreadable; it is now white.
+
+## Public QR menu responsiveness (31 October 2026)
+
+- The menu column was sized to its grid item's min-content — the horizontally
+  scrolling category pill row, ~1600px on a real 10-category menu — so the page
+  rendered 1610px wide at **every** viewport: zoomed out on phones, horizontal
+  scrollbar on desktops, and the mobile breakpoint never took effect because the
+  column itself never shrank.
+- Grid/flex children now allow shrinking below min-content, the pill row scrolls
+  inside its own box, the product grid uses `auto-fill` with a 150px floor
+  (1 column at 320px, 2 from 360px) and the header/tracking code wrap instead of
+  overflowing.
+- Four regression tests (`360/390/768/1280px`) mock a full category list and assert
+  the menu column never exceeds the viewport; they were confirmed to fail (1504px)
+  with the fix removed. The earlier QR test only mocked a single category, which is
+  why it never caught this. Suite now **28 passed**.
+- Live probe of the deployed page at 320/360/390/430/768/1024/1440px: document
+  width equals the viewport at all seven widths, all 95 item images load.
 
 ## Release blockers / remaining acceptance work
 
