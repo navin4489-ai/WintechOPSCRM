@@ -25,7 +25,7 @@ async function setup(page:Page,role?:'Owner'|'StoreManager'){
   });
 }
 async function fits(page:Page){
-  const result=await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('input,select,textarea,button')].filter(e=>{const el=e as HTMLElement;const s=getComputedStyle(el);const b=el.getBoundingClientRect();return s.visibility!=='hidden'&&s.display!=='none'&&b.width>0&&!el.closest('.table-wrap')&&(b.left< -2||b.right>innerWidth+2);}).map(e=>({text:e.textContent?.slice(0,40),tag:e.tagName}))}));
+  const result=await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('input,select,textarea,button')].filter(e=>{const el=e as HTMLElement;const s=getComputedStyle(el);const b=el.getBoundingClientRect();return s.visibility!=='hidden'&&s.display!=='none'&&b.width>0&&(!el.closest('.table-wrap')&&!el.closest('.categories'))&&(b.left< -2||b.right>innerWidth+2);}).map(e=>({text:e.textContent?.slice(0,40),tag:e.tagName}))}));
   expect(result.documentWidth).toBeLessThanOrEqual(result.width+1);expect(result.overflow).toEqual([]);
 }
 for(const width of [375,390,430]){
@@ -52,6 +52,27 @@ test('QR phone checkout and private preparation tracking fit 390px',async({page}
   await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(page.locator('.confirmation')).toContainText('Ready');await expect(page.locator('.confirmation')).not.toContainText('9999999999');await fits(page);await page.screenshot({path:info.outputPath('customer-tracking-390.png'),fullPage:true});
   const savedLink=page.url();const reopened=await page.context().newPage();await reopened.setViewportSize({width:390,height:844});await setup(reopened);await reopened.goto(savedLink);await expect(reopened.locator('.confirmation')).toContainText('Ready');await fits(reopened);await reopened.close();
 });
+for(const width of [360,390,768,1280]){
+  // A real outlet menu has ~10 category pills whose combined min-content is wider
+  // than any phone; the layout must shrink and let that row scroll on its own.
+  test(`Public QR menu with a full category list fits ${width}px`,async({page},info)=>{
+    await page.setViewportSize({width,height:844});await setup(page);
+    const names=['Starters (Veg)','Starters (Non-Veg)','Main Course (Veg)','Main Course (Non-Veg)','Breads','Rice & Biryani','Sweets (Mithai)','Beverages','Soups & Salads','Desserts'];
+    const products=names.flatMap((c,ci)=>Array.from({length:6},(_,i)=>({id:ci*10+i+1,outletId:10,categoryId:ci+1,categoryName:c,name:`${c} item ${i+1}`,sku:`KRI-${ci}-${i}`,price:90+ci*40,isAvailable:true,description:'Seeded menu item with a realistic description of the dish served here.',modifierGroups:[]})));
+    await page.route('**/api/public/outlets/**/menu',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,data:{outletName:outlet.name,address:outlet.address,phone:outlet.phone,currency:'INR',acceptingOrders:true,paymentInstruction:'Pay cash at the outlet.',products}})}));
+    await page.goto('/order/'+'a'.repeat(64));
+    await expect(page.locator('.categories button')).toHaveCount(names.length+1);
+    await expect(page.locator('.products .product')).toHaveCount(products.length);
+    // The menu column must not be forced to the pill row's min-content width.
+    const menuBox=await page.locator('.order-layout > section').evaluate(e=>Math.round(e.getBoundingClientRect().width));
+    expect(menuBox).toBeLessThanOrEqual(width+1);
+    await fits(page);
+    const row=await page.locator('.categories').evaluate(e=>({scroll:e.scrollWidth,client:e.clientWidth}));
+    expect(row.scroll).toBeGreaterThan(row.client); // pills scroll inside their own box
+    expect(await page.locator('.order-layout').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length)).toBe(width<=850?1:2);
+    await page.screenshot({path:info.outputPath(`public-menu-${width}.png`),fullPage:false});
+  });
+}
 for(const path of ['/dashboard','/pos','/orders','/inventory','/menu','/staff','/reports','/shifts'])test(`Operational page ${path} fits 390px`,async({page})=>{
   await page.setViewportSize({width:390,height:844});await setup(page,'StoreManager');await page.goto(path);await expect(page.locator('.content')).toBeVisible();await page.waitForTimeout(500);await fits(page);
 });
