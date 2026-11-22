@@ -36,6 +36,9 @@ Thumbs.db
 # Logs & local env
 *.log
 appsettings.Development.json
+# Deployment secrets (connection strings, JWT key, seed passwords) live only
+# on the server — never commit them.
+appsettings.Production.json
 .env
 **/test-results/
 **/playwright-report/

@@ -15,9 +15,12 @@ var builder = WebApplication.CreateBuilder(args);
 // CreateBuilder already loads appsettings followed by environment variables.
 // Re-adding JSON here would override deployment secrets with checked-in defaults.
 
-// DbContext — PostgreSQL on Render. DATABASE_URL (Render's convention) wins over
-// the appsettings default so a local dev connection string never overrides it.
-// Render hands out postgres:// URIs; Npgsql expects key=value pairs, so normalize.
+// DbContext — SQLite file stored beside the app (self-hosted UAT: no external
+// database service, nothing to provision). DATABASE_URL (deployment convention)
+// wins over the appsettings default so a local dev connection string never
+// overrides it. A relative Data Source is resolved against the app's base
+// directory so the file lands beside the binaries regardless of IIS's working
+// directory, and its directory is created up front (SQLite won't create it).
 var rawConnectionString =
     Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? builder.Configuration["DATABASE_URL"]
@@ -25,70 +28,33 @@ var rawConnectionString =
     ?? throw new InvalidOperationException(
         "No database connection string configured. Set DATABASE_URL or ConnectionStrings:DefaultConnection.");
 
-var connectionString = ToNpgsqlConnectionString(rawConnectionString);
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
-// Converts postgres://user:pass@host:port/db?sslmode=require into the
-// key=value form Npgsql requires. Strings already in key=value form pass through.
-static string ToNpgsqlConnectionString(string value)
+if (IsPostgresConnectionString(rawConnectionString))
 {
-    value = value.Trim();
-    if (!value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
-        !value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
-    {
-        return value;
-    }
-
-    var uri = new Uri(value);
-    var cs = new StringBuilder();
-    cs.Append("Host=").Append(uri.Host);
-
-    if (!uri.IsDefaultPort)
-    {
-        cs.Append(";Port=").Append(uri.Port);
-    }
-
-    var database = uri.AbsolutePath.Trim('/');
-    if (database.Length > 0)
-    {
-        cs.Append(";Database=").Append(Quote(database));
-    }
-
-    if (!string.IsNullOrEmpty(uri.UserInfo))
-    {
-        var separator = uri.UserInfo.IndexOf(':');
-        var user = separator >= 0 ? uri.UserInfo[..separator] : uri.UserInfo;
-        var password = separator >= 0 ? uri.UserInfo[(separator + 1)..] : string.Empty;
-        cs.Append(";Username=").Append(Quote(Uri.UnescapeDataString(user)));
-        cs.Append(";Password=").Append(Quote(Uri.UnescapeDataString(password)));
-    }
-
-    var query = uri.Query.TrimStart('?');
-    foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
-    {
-        var kv = pair.Split('=', 2);
-        var key = Uri.UnescapeDataString(kv[0]);
-        var val = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
-
-        if (string.Equals(key, "sslmode", StringComparison.OrdinalIgnoreCase))
-        {
-            // Render's managed Postgres expects TLS; map to Npgsql's enum spelling.
-            cs.Append(";SSL Mode=").Append(val.Equals("disable", StringComparison.OrdinalIgnoreCase)
-                ? "Disable"
-                : "Require");
-        }
-        else if (!string.IsNullOrWhiteSpace(key))
-        {
-            cs.Append(';').Append(key).Append('=').Append(Quote(val));
-        }
-    }
-
-    return cs.ToString();
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseNpgsql(rawConnectionString));
+}
+else
+{
+    var connectionString = ResolveSqlitePath(rawConnectionString);
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseSqlite(connectionString));
 }
 
-static string Quote(string value) => $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+static bool IsPostgresConnectionString(string value) =>
+    value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+    value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) ||
+    value.Contains("Host=", StringComparison.OrdinalIgnoreCase);
+
+static string ResolveSqlitePath(string value)
+{
+    var cs = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(value);
+    if (string.IsNullOrWhiteSpace(cs.DataSource) || Path.IsPathRooted(cs.DataSource))
+        return value;
+    cs.DataSource = Path.Combine(AppContext.BaseDirectory, cs.DataSource);
+    var dir = Path.GetDirectoryName(cs.DataSource);
+    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+    return cs.ConnectionString;
+}
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "ORO_POS_Super_Secret_Key_32Chars!";
@@ -185,20 +151,20 @@ using (var scope = app.Services.CreateScope())
         {
             if (reset)
             {
-                // Drop the schema rather than the database itself: DROP DATABASE
-                // fails while our own pooled connections are open, whereas a schema
-                // drop always succeeds and clears every table (incl. migrations).
-                var conn = db.Database.GetDbConnection();
-                if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
-                await using (var cmd = conn.CreateCommand())
-                {
-                    cmd.CommandText = "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;";
-                    await cmd.ExecuteNonQueryAsync();
-                }
-                Console.WriteLine("[Startup] RESET_DB_ON_START=true — schema dropped, all data cleared.");
+                // SQLite: EnsureDeleted removes the database file itself, which
+                // MigrateAsync then recreates. (A schema-level DROP is not
+                // portable to SQLite, and pooled connections must close first —
+                // EnsureDeleted handles both.)
+                await db.Database.EnsureDeletedAsync();
+                Console.WriteLine("[Startup] RESET_DB_ON_START=true — database file deleted, all data cleared.");
             }
-            await db.Database.MigrateAsync();
-            Console.WriteLine("[Startup] Database migration applied.");
+            // SQLite uses the EF migration history. Managed Postgres (Render) is a
+            // fresh database created from the current model.
+            if (db.Database.IsSqlite())
+                await db.Database.MigrateAsync();
+            else
+                await db.Database.EnsureCreatedAsync();
+            Console.WriteLine("[Startup] Database schema ready.");
             break;
         }
         catch (Exception ex)

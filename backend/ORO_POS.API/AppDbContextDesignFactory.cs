@@ -7,5 +7,5 @@ namespace ORO_POS.API;
 public class AppDbContextDesignFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args) => new(new DbContextOptionsBuilder<AppDbContext>()
-        .UseNpgsql("Host=localhost;Database=oro_pos_design;Username=design;Password=design").Options);
+        .UseSqlite("Data Source=oro_pos_design.db").Options);
 }
