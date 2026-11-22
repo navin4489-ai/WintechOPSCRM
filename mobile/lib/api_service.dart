@@ -18,7 +18,7 @@ class ApiException implements Exception {
 class ApiService {
   static const baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://the-bathany.onrender.com/api',
+    defaultValue: 'https://pos.wintechinov.com/api',
   );
   final http.Client client;
   final FlutterSecureStorage storage;

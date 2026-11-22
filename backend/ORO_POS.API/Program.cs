@@ -31,7 +31,7 @@ var rawConnectionString =
 if (IsPostgresConnectionString(rawConnectionString))
 {
     builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseNpgsql(rawConnectionString));
+        options.UseNpgsql(NormalizePostgresUri(rawConnectionString)));
 }
 else
 {
@@ -44,6 +44,26 @@ static bool IsPostgresConnectionString(string value) =>
     value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
     value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) ||
     value.Contains("Host=", StringComparison.OrdinalIgnoreCase);
+
+// Render hands out postgres:// URIs; Npgsql only accepts keyword connection strings.
+static string NormalizePostgresUri(string value)
+{
+    if (!value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+        !value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        return value;
+    var uri = new Uri(value);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    var cs = new Npgsql.NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.IsDefaultPort ? 5432 : uri.Port,
+        Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
+        Username = Uri.UnescapeDataString(userInfo[0]),
+        Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : null,
+        SslMode = Npgsql.SslMode.Prefer,
+    };
+    return cs.ConnectionString;
+}
 
 static string ResolveSqlitePath(string value)
 {

@@ -57,7 +57,7 @@ flutter test
 flutter build apk --release
 ```
 
-API default: `https://the-bathany.onrender.com/api`. Override only at build time
+API default: `https://pos.wintechinov.com/api`. Override only at build time
 with `--dart-define=API_URL=https://your-host/api`. Release Android blocks cleartext HTTP.
 
 Output: `build/app/outputs/flutter-apk/app-release.apk`.
