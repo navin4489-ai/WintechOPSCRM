@@ -6,6 +6,7 @@
 mobile/
 **/*.apk
 **/*.aab
+!web/oro-pos-web/dist/oro-pos-web/browser/downloads/*.apk
 .git/
 .vs/
 .vscode/
