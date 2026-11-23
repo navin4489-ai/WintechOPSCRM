@@ -18,7 +18,7 @@ export class LoginComponent {
   hidePassword = true;
 
   constructor(private fb: FormBuilder, private authService: AuthService, private router: Router) {
-    this.form = fb.group({ username: ['admin'], password: ['Admin@123'] });
+    this.form = fb.group({ username: [''], password: [''] });
   }
 
   onSubmit() {
