@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
 import { TableDto, CreateTableRequest, ZoneDto, CreateZoneRequest, ApiResponse } from '../../models';
 
 @Component({
@@ -18,7 +19,7 @@ export class TablesComponent implements OnInit {
   newTable: CreateTableRequest = { outletId: 0, tableNumber: '', capacity: 4 };
   newZone: CreateZoneRequest = { outletId: 0, name: '' };
 
-  constructor(private api: ApiService, private auth: AuthService) {
+  constructor(private api: ApiService, private auth: AuthService, private toast: ToastService) {
     const user = auth.getCurrentUser();
     this.newTable.outletId = user?.outletId || 0;
     this.newZone.outletId = user?.outletId || 0;
@@ -31,20 +32,30 @@ export class TablesComponent implements OnInit {
   }
 
   createTable() {
-    this.api.createTable(this.newTable).subscribe((res: ApiResponse<TableDto>) => {
-      if (res.success && res.data) {
-        this.tables.push(res.data);
-        this.newTable = { outletId: this.newTable.outletId, tableNumber: '', capacity: 4 };
-      }
+    this.api.createTable(this.newTable).subscribe({
+      next: (res: ApiResponse<TableDto>) => {
+        if (res.success && res.data) {
+          this.tables.push(res.data);
+          this.newTable = { outletId: this.newTable.outletId, tableNumber: '', capacity: 4 };
+        } else {
+          this.toast.error(res.errors?.[0] || 'Could not add table');
+        }
+      },
+      error: () => this.toast.error('Could not add table. Only store managers and owners can set up tables.')
     });
   }
 
   createZone() {
-    this.api.createZone(this.newZone).subscribe((res: ApiResponse<ZoneDto>) => {
-      if (res.success && res.data) {
-        this.zones.push(res.data);
-        this.newZone = { outletId: this.newZone.outletId, name: '' };
-      }
+    this.api.createZone(this.newZone).subscribe({
+      next: (res: ApiResponse<ZoneDto>) => {
+        if (res.success && res.data) {
+          this.zones.push(res.data);
+          this.newZone = { outletId: this.newZone.outletId, name: '' };
+        } else {
+          this.toast.error(res.errors?.[0] || 'Could not add zone');
+        }
+      },
+      error: () => this.toast.error('Could not add zone. Only store managers and owners can set up zones.')
     });
   }
 

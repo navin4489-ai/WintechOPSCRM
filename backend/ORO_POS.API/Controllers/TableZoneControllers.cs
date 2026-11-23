@@ -22,7 +22,7 @@ public class TablesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTableRequest request)
     {
-        var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
+        var can = User.IsInRole("StoreManager") || await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
         if (!can) return Forbid();
         var created = await _table.CreateTableAsync(request, GetUserId());
         return CreatedAtAction(nameof(GetByOutlet), new { outletId = request.OutletId }, new ApiResponse<TableDto> { Success = true, Data = created });
@@ -54,7 +54,7 @@ public class ZonesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateZoneRequest request)
     {
-        var can = await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
+        var can = User.IsInRole("StoreManager") || await _auth.ValidatePermissionAsync(GetUserId(), Permission.ManageSettings);
         if (!can) return Forbid();
         var created = await _table.CreateZoneAsync(request, GetUserId());
         return CreatedAtAction(nameof(GetByOutlet), new { outletId = request.OutletId }, new ApiResponse<ZoneDto> { Success = true, Data = created });

@@ -2,7 +2,7 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Point of Sale</h1>
-      <p class="page-subtitle">{{ user?.username }} · {{ outlet?.name || 'Main Outlet' }}</p>
+      <p class="page-subtitle">{{ user?.username }} · {{ outlet?.name || user?.outletName }}</p>
     </div>
     <div class="legend">
       <button (click)="showNewSale = true" [disabled]="tableLoading || savingItem || processing">New takeaway / retail sale</button>
